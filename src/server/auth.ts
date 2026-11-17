@@ -43,7 +43,12 @@ export async function verificarCredenciales(
 ): Promise<UsuarioAutenticado | null> {
   const normalizado = email.trim().toLowerCase()
 
-  const usuario = await prisma.usuario.findUnique({ where: { email: normalizado } })
+  // Búsqueda insensible a mayúsculas: el email se normaliza al leer, pero una fila
+  // guardada como "Admin@Caja.Local" (por un import, un seed viejo o un alta manual)
+  // quedaría imposible de loguear con un findUnique exacto.
+  const usuario = await prisma.usuario.findFirst({
+    where: { email: { equals: normalizado, mode: 'insensitive' } },
+  })
 
   if (!usuario) {
     await bcrypt.compare(password, await señuelo())

@@ -109,6 +109,48 @@ describe('sesión firmada', () => {
     expect(leerSesion(`${basura}.${firma}`)).toBeNull()
   })
 
+  it('rechaza una expiración extendida sobre una firma real', () => {
+    const [payload, firma] = firmarSesion('usuario-1').split('.')
+    const { sub } = JSON.parse(Buffer.from(payload, 'base64url').toString())
+    const falso = Buffer.from(
+      JSON.stringify({ sub, exp: Date.now() + 100 * 365 * 24 * 3600_000 }),
+    ).toString('base64url')
+
+    expect(leerSesion(`${falso}.${firma}`)).toBeNull()
+  })
+
+  it('rechaza la sesión exactamente en su instante de expiración', () => {
+    const ahora = 1_000_000
+    const valor = firmarSesion('usuario-1', { duracionMs: 0, ahora })
+
+    expect(leerSesion(valor, ahora)).toBeNull()
+  })
+
+  it('la lectura falla cerrado sin SESSION_SECRET y con uno corto', () => {
+    const valor = firmarSesion('usuario-1')
+    const original = process.env.SESSION_SECRET
+    try {
+      delete process.env.SESSION_SECRET
+      expect(leerSesion(valor)).toBeNull()
+      process.env.SESSION_SECRET = 'corto'
+      expect(leerSesion(valor)).toBeNull()
+    } finally {
+      process.env.SESSION_SECRET = original
+    }
+  })
+
+  it('acepta un email guardado con mayúsculas', async () => {
+    const usuario = await crearUsuario({ email: 'Admin@Caja.Local' })
+    await prisma.usuario.update({
+      where: { id: usuario.id },
+      data: { passwordHash: await hashPassword('caja1234') },
+    })
+
+    await expect(
+      verificarCredenciales('admin@caja.local', 'caja1234'),
+    ).resolves.toEqual({ id: usuario.id, email: 'Admin@Caja.Local', nombre: usuario.nombre })
+  })
+
   it('rechaza una sesión con la firma cortada', () => {
     const valor = firmarSesion('usuario-1')
     expect(leerSesion(valor.slice(0, -2))).toBeNull()
