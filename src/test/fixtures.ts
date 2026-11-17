@@ -27,3 +27,42 @@ export async function crearProducto(
     },
   })
 }
+
+/**
+ * Inserta una venta con fecha explícita, sin pasar por registrarVenta.
+ *
+ * Los reportes se prueban contra días concretos, y `registrarVenta` siempre usa
+ * `now()`: no hay forma de pedirle "una venta del 16 a las 23:30". Esta es la
+ * única razón por la que los tests escriben ventas directamente.
+ */
+export async function crearVentaDirecta(datos: {
+  usuarioId: string
+  creadaEn: string
+  lineas: { productoId: string; cantidad: number; precioUnitarioCentavos: number }[]
+  medio?: 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA'
+}) {
+  const lineas = datos.lineas.map((linea) => ({
+    ...linea,
+    subtotalCentavos: linea.precioUnitarioCentavos * linea.cantidad,
+  }))
+  const totalCentavos = lineas.reduce((suma, l) => suma + l.subtotalCentavos, 0)
+  const creadaEn = new Date(datos.creadaEn)
+
+  return prisma.venta.create({
+    data: {
+      usuarioId: datos.usuarioId,
+      totalCentavos,
+      createdAt: creadaEn,
+      lineas: { create: lineas },
+      pagos: {
+        create: [
+          {
+            medio: datos.medio ?? 'EFECTIVO',
+            montoCentavos: totalCentavos,
+            createdAt: creadaEn,
+          },
+        ],
+      },
+    },
+  })
+}
