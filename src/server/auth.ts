@@ -1,18 +1,15 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../lib/db'
+import { DURACION_SESION_MS, LARGO_MINIMO_SECRETO, NOMBRE_COOKIE_SESION } from './cookie'
+
+// Las constantes compartidas con el middleware viven en cookie.ts, que no tiene
+// dependencias: el runtime Edge no puede importar Prisma ni bcrypt.
+export { NOMBRE_COOKIE_SESION }
 
 // Costo 12: ~300 ms por hash en esta máquina. Es lento a propósito — encarece el
 // ataque de fuerza bruta mucho más de lo que molesta a un login real.
 const COSTO_BCRYPT = 12
-
-const DURACION_SESION_MS = 8 * 60 * 60 * 1000
-
-// 32 caracteres es el mínimo razonable para una clave HMAC: menos que eso deja de
-// ser un secreto y pasa a ser una adivinanza.
-const LARGO_MINIMO_SECRETO = 32
-
-export const NOMBRE_COOKIE_SESION = 'caja_sesion'
 
 export type UsuarioAutenticado = { id: string; email: string; nombre: string }
 

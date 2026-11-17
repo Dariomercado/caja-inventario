@@ -30,7 +30,12 @@ export type PagoVenta = { medio: MedioPagoVenta; montoCentavos: number }
 export type RegistrarVentaInput = {
   usuarioId: string
   items: ItemVenta[]
-  pagos: PagoVenta[]
+  // Exactamente uno de los dos: o se detallan los pagos, o se indica un único
+  // medio y el monto sale del total calculado dentro de la transacción. El segundo
+  // camino existe para la UI: si el navegador calculara el total y lo mandara,
+  // bastaría un precio desactualizado para cobrar mal.
+  pagos?: PagoVenta[]
+  medioPago?: MedioPagoVenta
 }
 
 export type VentaRegistrada = {
@@ -66,10 +71,14 @@ type ProductoBloqueado = {
 export async function registrarVenta(
   input: RegistrarVentaInput,
 ): Promise<VentaRegistrada> {
-  const { usuarioId, items, pagos } = input
+  const { usuarioId, items, pagos, medioPago } = input
 
   if (items.length === 0) {
     throw new Error('La venta necesita al menos un ítem')
+  }
+
+  if ((pagos === undefined) === (medioPago === undefined)) {
+    throw new Error('Indicá los pagos o un único medio de pago, no ambos ni ninguno')
   }
 
   // Consolidar ítems repetidos: si el mismo producto aparece dos veces, hay que
@@ -135,7 +144,10 @@ export async function registrarVenta(
       })
     }
 
-    const pagadoCentavos = pagos.reduce((suma, pago) => suma + pago.montoCentavos, 0)
+    const pagosEfectivos: PagoVenta[] =
+      pagos ?? [{ medio: medioPago!, montoCentavos: totalCentavos }]
+
+    const pagadoCentavos = pagosEfectivos.reduce((suma, pago) => suma + pago.montoCentavos, 0)
     if (!Number.isInteger(pagadoCentavos) || pagadoCentavos !== totalCentavos) {
       throw new PagoInconsistenteError(totalCentavos, pagadoCentavos)
     }
@@ -146,7 +158,7 @@ export async function registrarVenta(
         totalCentavos,
         lineas: { create: lineas },
         pagos: {
-          create: pagos.map((pago) => ({
+          create: pagosEfectivos.map((pago) => ({
             medio: pago.medio,
             montoCentavos: pago.montoCentavos,
           })),
