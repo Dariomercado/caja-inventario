@@ -108,6 +108,10 @@ npm run db:seed               # datos de demo
 npm run dev
 ```
 
+Hay una tercera variable, `DIRECT_URL`. En local es opcional: si no está, las
+migraciones usan `DATABASE_URL` y todo funciona igual. Con un proveedor que expone una
+conexión *pooled* deja de ser opcional — ver **Deploy**.
+
 Credenciales de demo: `admin@caja.local` / `caja1234`.
 
 ### Tests
@@ -120,6 +124,25 @@ DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm
 
 Los tests truncan tablas antes de cada caso y **abortan si la base no termina en `_test`**:
 mejor negarse a correr que borrar datos de desarrollo por accidente.
+
+## Deploy
+
+Un proveedor de Postgres gestionado (Supabase, Neon) expone **dos** cadenas de conexión, y
+usar la equivocada falla de forma poco obvia:
+
+| Variable | Qué URL | Para qué |
+| --- | --- | --- |
+| `DATABASE_URL` | pooled (puerto 6543) | la aplicación en cada request |
+| `DIRECT_URL` | directa (puerto 5432) | migraciones, que necesitan locks que el pooler no da |
+| `SESSION_SECRET` | — | nuevo `openssl rand -hex 32`, **distinto** al de desarrollo |
+
+Antes del primer deploy hay que crear el esquema en la base de producción:
+
+```bash
+DIRECT_URL="<url directa>" npm run db:migrate
+```
+
+Y no correr `db:seed` contra producción: siembra el catálogo de demostración.
 
 ## Decisiones y por qué
 
