@@ -58,7 +58,9 @@ completo —login, venta, reporte— en una sola grabación de 10 minutos o meno
   sembrados; bordes de fecha y zona horaria. Specs: S7. Ruta: inline. Commit: `0d06d16`
 - **T5 — Autenticación.** Login de un rol: hash de contraseña, cookie de sesión
   `httpOnly`, protección de rutas, cierre de sesión. Tests. Specs: S2, S3. Ruta: inline
-  (alto riesgo: seguridad). Commit: _(pendiente)_
+  (alto riesgo: seguridad). Commit: `187885a` (primitivas), `13fae71` (handlers).
+  La protección de rutas se mueve a T6: sin página que proteger, un guard sería
+  código muerto. El cierre de sesión sí quedó en T5.
 - **T6 — UI.** Login + tres pantallas consumiendo los servicios. Specs: S8. Ruta: inline.
   Commit: _(pendiente)_
 - **T7 — Deploy.** PostgreSQL gestionado + hosting de Next.js, variables de entorno,
@@ -122,3 +124,15 @@ una unidad coherente (la venta produce los datos que los reportes agregan) y sep
 dejaría la mitad de los reportes sin datos que reportar. Estrategia: T5-T8 van en un
 slice nuevo `feat/auth-ui`, apilado sobre este, para que el review no reciba una sola
 entrega de mil líneas.
+
+**L14 — Verificación independiente de T5 (commit `187885a`).** El verificador encontró
+sin defecto de seguridad: 21 pruebas de bypass rechazadas (firma ajena, `exp` extendido
+sobre firma real, token de 3 partes, secreto corto o ausente) y confirmó por mutación que
+el test de falsificación no es vacío. Reportó en cambio: (a) el spec de T5 pedía
+protección de rutas y cierre de sesión y sólo existían las primitivas; (b) un bug real —
+el email se normalizaba sólo al leer, así que una fila con mayúsculas nunca podría
+loguear; (c) un test débil que pasaba por la razón equivocada. Corregido: búsqueda
+insensible a mayúsculas, handlers de login/logout, y los probes del verificador agregados
+(retirada de expiración sobre firma real, expiración exacta, lectura sin secreto).
+Advisories no bloqueantes aceptados sin cambios: sin rate-limit, sin revocación de sesión,
+`bcrypt` trunca a 72 bytes.
