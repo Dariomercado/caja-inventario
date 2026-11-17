@@ -46,16 +46,16 @@ completo —login, venta, reporte— en una sola grabación de 10 minutos o meno
 
 - **T1 — Andamiaje y entorno.** Next.js + TS + Tailwind + Prisma + Vitest; Docker Compose
   con PostgreSQL; `.env.example`; scripts `db:up`, `db:down`, `db:migrate`, `db:seed`,
-  `test`. Specs: S1, S9. Ruta: inline. Commit: _(pendiente)_
+  `test`. Specs: S1, S9. Ruta: inline. Commit: `478ee96`
 - **T2 — Modelo de datos y migración.** Schema Prisma de las seis entidades con constraints
   (stock no negativo donde corresponda, FKs, precios en centavos); migración inicial y
-  seed con datos de demo. Specs: S5. Ruta: inline. Commit: _(pendiente)_
+  seed con datos de demo. Specs: S5. Ruta: inline. Commit: `478ee96`
 - **T3 — Núcleo transaccional.** Servicio de venta: cálculo de totales en centavos,
   descuento de stock dentro de transacción con bloqueo de fila, registro de pago.
   Tests de concurrencia (dos ventas simultáneas, stock insuficiente). Specs: S6. Ruta:
-  inline. Commit: _(pendiente)_
+  inline. Commit: `a1fdbb9`
 - **T4 — Reportes SQL.** Las tres consultas de S7 como servicios con tests sobre datos
-  sembrados; bordes de fecha y zona horaria. Specs: S7. Ruta: inline. Commit: _(pendiente)_
+  sembrados; bordes de fecha y zona horaria. Specs: S7. Ruta: inline. Commit: `0d06d16`
 - **T5 — Autenticación.** Login de un rol: hash de contraseña, cookie de sesión
   `httpOnly`, protección de rutas, cierre de sesión. Tests. Specs: S2, S3. Ruta: inline
   (alto riesgo: seguridad). Commit: _(pendiente)_
@@ -84,3 +84,41 @@ completo —login, venta, reporte— en una sola grabación de 10 minutos o meno
 **L5** — Hallazgo de entorno: en este WSL `pnpm` resuelve a
 `/mnt/c/Program Files/nodejs/pnpm`, un binario de Windows. Se adopta `npm` de Linux
 para el proyecto. `psql` no está instalado: se usa `docker exec` contra el contenedor.
+
+**L6** — Prisma 7 rompe compatibilidad en tres puntos: `url` ya no va en el `datasource`
+(se movió a `prisma7.config.ts` para migrar y al driver adapter para el runtime), el
+cliente se genera como fuente TS en `generated/prisma` con entrada `client.ts` (no hay
+`index`), y el bloque `"prisma"` de `package.json` se ignora en silencio: el seed se
+declara en `migrations.seed` del config. `prisma` publica además un RC como `latest`
+(`8.0.0-rc.34`): se fijó el par estable `prisma`/`@prisma/client` en `7.10.1`.
+
+**L7** — `npm install` falla con `ERR_SSL_CIPHER_OPERATION_FAILED` (Node 24 + OpenSSL
+3.5.8) al abrir conexiones TLS en paralelo. Se resuelve con `--maxsockets=1`. No se
+commitea `.npmrc`: es una particularidad de esta máquina, no del proyecto. `tail`
+además se comía el exit code de la tubería hasta agregar `set -o pipefail`.
+
+**L8** — Los tests usan una base separada `caja_test` con un guard que aborta si el
+nombre de la base no termina en `_test`, porque el setup trunca tablas entre casos.
+
+**L9** — Verificación por mutación: al quitar `FOR UPDATE` de la consulta, el test de
+concurrencia falla (las dos ventas se completan, stock negativo). Confirma que el test
+no es vacío y que el bloqueo de fila es lo que sostiene S6.
+
+**L10** — Commits: `478ee96` foundation (T1+T2) en `main`; `a1fdbb9` T3 en
+`feat/venta-transaccional`.
+
+**L11** — Zona horaria: los reportes calculan los límites del día en
+`America/Argentina/Buenos_Aires`, no en UTC. Verificado por mutación: cambiando la
+constante a `UTC`, el test de la venta de las 23:30 falla. Sin ese manejo, la caja diaria
+no cierra porque las ventas de la última hora caen en el día siguiente.
+
+**L12** — El writer de ODD (`gentle-ai-worker`) falló dos veces con "Writer repository
+preparation was unavailable or its session/target changed", con el árbol limpio y un
+solo worktree. Se implementó T4 inline como fallback declarado.
+
+**L13 — Límite de slice.** El slice 1 (`feat/venta-transaccional`) acumuló 694 líneas
+autoradas en 3 commits (T3 + T4 + docs), por encima del objetivo de ~400. T3 y T4 son
+una unidad coherente (la venta produce los datos que los reportes agregan) y separarlas
+dejaría la mitad de los reportes sin datos que reportar. Estrategia: T5-T8 van en un
+slice nuevo `feat/auth-ui`, apilado sobre este, para que el review no reciba una sola
+entrega de mil líneas.
