@@ -146,6 +146,35 @@ describe('registrarVenta', () => {
     expect(linea.subtotalCentavos).toBe(100_000)
   })
 
+  it('cobra el total calculado en la transacción cuando se indica un solo medio', async () => {
+    const usuario = await crearUsuario()
+    const producto = await crearProducto({ precioCentavos: 150_000, stock: 5 })
+
+    const venta = await registrarVenta({
+      usuarioId: usuario.id,
+      items: [{ productoId: producto.id, cantidad: 2 }],
+      medioPago: 'TRANSFERENCIA',
+    })
+
+    // El monto lo decide el servidor con el precio real, no el cliente.
+    expect(venta.totalCentavos).toBe(300_000)
+    const pagos = await prisma.pago.findMany({ where: { ventaId: venta.id } })
+    expect(pagos).toHaveLength(1)
+    expect(pagos[0]).toMatchObject({ medio: 'TRANSFERENCIA', montoCentavos: 300_000 })
+  })
+
+  it('exige pagos o medio de pago, pero no ambos', async () => {
+    const usuario = await crearUsuario()
+    const producto = await crearProducto({ stock: 5 })
+
+    await expect(
+      registrarVenta({
+        usuarioId: usuario.id,
+        items: [{ productoId: producto.id, cantidad: 1 }],
+      }),
+    ).rejects.toThrow(/pagos o un único medio/)
+  })
+
   it('rechaza una venta cuyos pagos no suman el total', async () => {
     const usuario = await crearUsuario()
     const producto = await crearProducto({ precioCentavos: 100_000, stock: 5 })

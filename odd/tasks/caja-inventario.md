@@ -58,14 +58,16 @@ completo —login, venta, reporte— en una sola grabación de 10 minutos o meno
   sembrados; bordes de fecha y zona horaria. Specs: S7. Ruta: inline. Commit: `0d06d16`
 - **T5 — Autenticación.** Login de un rol: hash de contraseña, cookie de sesión
   `httpOnly`, protección de rutas, cierre de sesión. Tests. Specs: S2, S3. Ruta: inline
-  (alto riesgo: seguridad). Commit: _(pendiente)_
+  (alto riesgo: seguridad). Commit: `187885a` (primitivas), `13fae71` (handlers).
+  La protección de rutas se mueve a T6: sin página que proteger, un guard sería
+  código muerto. El cierre de sesión sí quedó en T5.
 - **T6 — UI.** Login + tres pantallas consumiendo los servicios. Specs: S8. Ruta: inline.
-  Commit: _(pendiente)_
+  Commit: `2022870`
 - **T7 — Deploy.** PostgreSQL gestionado + hosting de Next.js, variables de entorno,
   migración en producción, smoke test contra la URL real. Specs: S3. Ruta: inline.
   Commit: _(pendiente)_
 - **T8 — Documentación y demo.** README con arquitectura y decisiones técnicas, más el
-  recorrido de 10 minutos. Specs: S10. Ruta: inline. Commit: _(pendiente)_
+  recorrido de 10 minutos. Specs: S10. Ruta: inline. Commit: `688fba8`
 
 ## Log
 
@@ -122,3 +124,38 @@ una unidad coherente (la venta produce los datos que los reportes agregan) y sep
 dejaría la mitad de los reportes sin datos que reportar. Estrategia: T5-T8 van en un
 slice nuevo `feat/auth-ui`, apilado sobre este, para que el review no reciba una sola
 entrega de mil líneas.
+
+**L14 — Verificación independiente de T5 (commit `187885a`).** El verificador encontró
+sin defecto de seguridad: 21 pruebas de bypass rechazadas (firma ajena, `exp` extendido
+sobre firma real, token de 3 partes, secreto corto o ausente) y confirmó por mutación que
+el test de falsificación no es vacío. Reportó en cambio: (a) el spec de T5 pedía
+protección de rutas y cierre de sesión y sólo existían las primitivas; (b) un bug real —
+el email se normalizaba sólo al leer, así que una fila con mayúsculas nunca podría
+loguear; (c) un test débil que pasaba por la razón equivocada. Corregido: búsqueda
+insensible a mayúsculas, handlers de login/logout, y los probes del verificador agregados
+(retirada de expiración sobre firma real, expiración exacta, lectura sin secreto).
+Advisories no bloqueantes aceptados sin cambios: sin rate-limit, sin revocación de sesión,
+`bcrypt` trunca a 72 bytes.
+
+**L15 — Fuga de datos por el guard en el layout.** Verificado con un pedido anónimo:
+`GET /productos` devolvía **200 con el catálogo completo** en el cuerpo, además de
+`NEXT_REDIRECT`. Causa: Next renderiza layout y página en paralelo, así que cuando el
+guard del layout llama a `redirect()` la consulta a la base ya corrió y los datos ya se
+streamearon. Ningún test unitario lo detectaba. Corregido con `src/middleware.ts`, que
+corre antes del render: ahora las tres rutas protegidas devuelven 307 sin datos.
+
+**L16 — Dos runtimes para firmar.** El middleware corre en Edge, donde no existe
+`node:crypto`. `sesion-edge.ts` reimplementa la verificación con Web Crypto y un test
+cruza las dos implementaciones (`firmarSesion` con Node → `leerSesionEdge` con Web
+Crypto). Sin ese test, un cambio de formato en un lado dejaría el login emitiendo tokens
+que el guard rechaza, con síntoma "no anda el login" a kilómetros de la causa.
+
+**L17 — Next 16 y cacheComponents.** `export const dynamic = 'force-dynamic'` está
+prohibido y el prerender falla en cualquier ruta que lea `cookies()`. Las rutas
+bloqueantes se declaran con `export const instant = false`, que es lo correcto en una app
+autenticada: cada request necesita la sesión.
+
+**L18 — Límite de slice, otra vez.** El slice 2 (`feat/auth-ui`) acumuló ~1670 líneas
+autoradas. T5 y T6 no se separaron porque el guard de rutas sólo tiene sentido donde hay
+páginas que proteger: sin UI, habría sido código muerto. Queda registrado como desvío y
+no como decisión cómoda.

@@ -13,7 +13,10 @@ export default defineConfig({
     seed: 'tsx prisma/seed.ts',
   },
   datasource: {
-    // En producción la provee la plataforma de hosting; en local, .env.
-    url: process.env['DATABASE_URL'],
+    // En producción (Supabase, Neon y compañía) hay dos URLs distintas: la poolada
+    // para la aplicación y la directa para migrar, porque el pooler no soporta los
+    // locks que necesitan las migraciones. Sin variable directa, cae a la de siempre
+    // y el desarrollo local sigue funcionando sin configurar nada extra.
+    url: process.env['DIRECT_URL'] ?? process.env['DATABASE_URL'],
   },
 })
