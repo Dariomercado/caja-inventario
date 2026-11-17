@@ -1,0 +1,133 @@
+// Modelo de datos de caja-inventario.
+//
+// Reglas que este schema hace cumplir y que no son obvias a primera vista:
+//
+// 1. TODO el dinero se guarda en centavos enteros. Nunca Decimal, nunca Float.
+//    Sumar 0.1 + 0.2 en punto flotante da 0.30000000000000004 y una caja que no
+//    cierra. Entero no tiene ese problema.
+//
+// 2. `Producto.stock` es el stock autoritativo y `MovimientoStock` es el libro
+//    mayor. Duplicar parece redundancia, pero es lo que permite bloquear la fila
+//    con SELECT ... FOR UPDATE dentro de la transacción de venta, y lo que hace
+//    el historial reconstruible.
+//
+// 3. `LineaVenta.precioUnitarioCentavos` congela el precio del momento. Si el
+//    producto cambia de precio mañana, las ventas de ayer no se mueven.
+
+generator client {
+  // Prisma 7: generador nuevo con salida explícita. El cliente se importa desde
+  // ../../generated/prisma, no desde @prisma/client.
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Sin `url`: Prisma 7 la movió a prisma7.config.ts (migraciones) y al driver
+  // adapter de src/lib/db.ts (runtime).
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  AJUSTE
+}
+
+enum MedioPago {
+  EFECTIVO
+  TRANSFERENCIA
+  TARJETA
+}
+
+model Usuario {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  nombre       String
+  // Hash bcrypt. La contraseña en claro no existe en ningún lado del sistema.
+  passwordHash String
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ventas Venta[]
+}
+
+model Producto {
+  id             String   @id @default(cuid())
+  sku            String   @unique
+  nombre         String
+  precioCentavos Int
+  // Stock actual. Entero: no existen medias unidades.
+  stock          Int      @default(0)
+  activo         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  movimientos MovimientoStock[]
+  lineas      LineaVenta[]
+
+  @@index([activo, nombre])
+}
+
+model MovimientoStock {
+  id         String         @id @default(cuid())
+  productoId String
+  producto   Producto       @relation(fields: [productoId], references: [id], onDelete: Restrict)
+  tipo       TipoMovimiento
+  // Siempre positivo: el signo lo determina `tipo`. Guardar -5 en una SALIDA
+  // invita a que alguien lo sume dos veces.
+  cantidad   Int
+  // Stock resultante después del movimiento, para auditar sin recalcular toda
+  // la historia del producto.
+  stockLuego Int
+  motivo     String?
+  ventaId    String?
+  venta      Venta?         @relation(fields: [ventaId], references: [id], onDelete: SetNull)
+  createdAt  DateTime       @default(now())
+
+  @@index([productoId, createdAt])
+}
+
+model Venta {
+  id            String   @id @default(cuid())
+  // Número legible para el comprobante; el id cuid es interno.
+  numero        Int      @unique @default(autoincrement())
+  usuarioId     String
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  totalCentavos Int
+  createdAt     DateTime @default(now())
+
+  lineas      LineaVenta[]
+  pagos       Pago[]
+  movimientos MovimientoStock[]
+
+  @@index([createdAt])
+}
+
+model LineaVenta {
+  id                     String   @id @default(cuid())
+  ventaId                String
+  venta                  Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  productoId             String
+  producto               Producto @relation(fields: [productoId], references: [id], onDelete: Restrict)
+  cantidad               Int
+  // Precio congelado al momento de la venta, no una referencia al actual.
+  precioUnitarioCentavos Int
+  subtotalCentavos       Int
+  createdAt              DateTime @default(now())
+
+  @@index([ventaId])
+  @@index([productoId])
+}
+
+model Pago {
+  id            String    @id @default(cuid())
+  ventaId       String
+  venta         Venta     @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  medio         MedioPago
+  montoCentavos Int
+  createdAt     DateTime  @default(now())
+
+  @@index([ventaId])
+  @@index([createdAt, medio])
+}

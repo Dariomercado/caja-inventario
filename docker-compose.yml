@@ -1,0 +1,24 @@
+# PostgreSQL local para desarrollo.
+# Puerto 5433 en el host a propósito: 5432 suele estar ocupado por otro Postgres
+# (o por el de Docker Desktop) y el conflicto aparecería recién al conectar.
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: caja-inventario-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: caja
+      POSTGRES_PASSWORD: caja
+      POSTGRES_DB: caja
+    ports:
+      - "5433:5432"
+    volumes:
+      - caja-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caja -d caja"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  caja-db-data:
