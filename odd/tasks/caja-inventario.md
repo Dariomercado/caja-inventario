@@ -67,7 +67,7 @@ completo —login, venta, reporte— en una sola grabación de 10 minutos o meno
   migración en producción, smoke test contra la URL real. Specs: S3. Ruta: inline.
   Commit: _(pendiente)_
 - **T8 — Documentación y demo.** README con arquitectura y decisiones técnicas, más el
-  recorrido de 10 minutos. Specs: S10. Ruta: inline. Commit: _(pendiente)_
+  recorrido de 10 minutos. Specs: S10. Ruta: inline. Commit: `688fba8`
 
 ## Log
 
