@@ -242,3 +242,33 @@ agentes de la sesión no tiene modelo asignado para `review-risk`, `review-resil
 archivo: la configuración de modelos está declarada como controlada por el humano. El
 linaje `review-a75ef511611ce77c` quedó abierto sobre un candidato previo al arreglo, así que
 la revisión tiene que empezar de nuevo una vez que los roles existan.
+
+**L23 — Revisión nativa de T9: cinco hallazgos, una corrección y su rechazo.** Con los roles
+`review-*` ya asignados en el perfil, el linaje `review-4a85ed7f48944348` corrió las lentes
+risk, resilience y reliability sobre `99a1626..14e2f99`, más un refuter. Confirmó cinco
+hallazgos CRITICAL que son dos defectos, los dos introducidos por T9:
+
+1. El `catch` solo traducía `P2002`. Un reintento de la misma clave cuya primera venta se
+   llevó las últimas unidades falla en la validación de stock antes de llegar al índice
+   único, así que devolvía un error de stock en lugar del comprobante ya registrado.
+2. Cualquier `P2002` devolvía la venta existente sin comparar el carrito ni el medio de pago:
+   una clave reusada con otro carrito contestaba éxito con el comprobante viejo y la venta
+   nueva se perdía con su stock intacto.
+
+Corrección (`e996fd9`, 131 líneas de las 133 de presupuesto): se busca la venta de esa clave
+ante cualquier fallo de la transacción —no solo `P2002`— y se devuelve solo si el intento
+coincide en usuario, cantidades por producto y firma de pagos; si no, se lanza
+`ClaveIdempotenciaReutilizadaError` y la acción lo muestra. El índice único sigue siendo la
+garantía; la consulta no lo reemplaza, solo evita perder el reintento que ya no encuentra
+stock. Dos tests nuevos fallan contra el código anterior y pasan con el arreglo (reintento
+tras agotar stock, y clave reusada con otro carrito u otro medio). 59/59 tests, lint, `tsc`
+y build en verde.
+
+El validador dirigido aceptó las cinco findings como resueltas y **rechazó** la corrección
+por una regresión propia: yo había hecho que el formulario rotara la clave con cada edición
+del carrito. Si una venta se comitea y su respuesta se pierde, esa rotación hace que el
+reenvío edite y registre una **segunda** venta. Se revirtió: la clave sobrevive a cualquier
+fallo y rota solo tras una venta confirmada. Así un reintento o no registra nada o devuelve
+la venta que ese mismo envío ya había registrado, y un carrito editado con la clave vieja
+falla de forma visible en lugar de duplicar o descartar. El linaje quedó en `escalated`
+(terminal): la corrección acotada ya se usó. Spec: S11.
