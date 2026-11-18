@@ -4,6 +4,9 @@ Sistema de punto de venta con control de stock: registra ventas, descuenta inven
 cierra la caja del día. Construido como pieza de portfolio para mostrar trabajo real de
 base de datos — transacciones, concurrencia y SQL de reportes — sobre una interfaz acotada.
 
+En producción: <https://caja-inventario-sage.vercel.app> — login de demo `admin@caja.local`
+/ `caja1234`.
+
 ## Lo que hace
 
 - **Catálogo** con precio y stock, con alerta de stock bajo.
@@ -154,6 +157,21 @@ El seed es **idempotente** (`upsert`, no borra nada) y es lo que crea el usuario
 él no hay con qué loguearse en producción. Las credenciales de demo son públicas a
 propósito, porque es un entorno de demostración con datos de demostración.
 
+### Cómo está deployado
+
+Supabase (Postgres) + Vercel (Next.js). Tres cosas que no son obvias y costaron un intento
+fallido cada una:
+
+- **`prisma generate` corre en `postinstall`.** El cliente de Prisma 7 se emite como fuente
+  TypeScript en `generated/`, que está ignorado por git; sin ese hook un clone limpio no
+  compila (`module-not-found` en `src/lib/db.ts`).
+- **La conexión directa de Supabase es IPv6.** Desde una red sin IPv6 (WSL, por ejemplo) el
+  host `db.<ref>.supabase.co` no resuelve: se usa el **Session pooler** — puerto 5432 del
+  host del pooler — como `DIRECT_URL`. El pooler sí publica IPv4.
+- **Vercel necesita `DATABASE_URL` y `SESSION_SECRET` en Production, también durante el
+  build.** Next importa cada route module para recolectar su configuración, y `src/lib/db.ts`
+  valida la variable al importarse: sin ella el build falla, no el runtime.
+
 ## Decisiones y por qué
 
 | Decisión | Motivo |
@@ -177,4 +195,7 @@ plataforma.
 
 ## Estado
 
-Funcional en local, con 54 tests. El deploy está pendiente.
+Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 54
+tests. Verificado en producción: rutas protegidas sin fuga de datos (307 anónimo con cuerpo
+vacío), login con cookie firmada validada en el middleware, y una venta real de 2 unidades
+con su descuento de stock, su pago y el reporte del día cuadrando.

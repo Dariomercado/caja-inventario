@@ -65,7 +65,11 @@ completo —login, venta, reporte— en una sola grabación de 10 minutos o meno
   Commit: `2022870`
 - **T7 — Deploy.** PostgreSQL gestionado + hosting de Next.js, variables de entorno,
   migración en producción, smoke test contra la URL real. Specs: S3. Ruta: inline.
-  Commit: _(pendiente)_
+  Commits: `4d547d9` (trayecto a producción), `39a7a25` (cliente Prisma en el build),
+  (cierre en este commit). Deployado en `caja-inventario-sage.vercel.app`.
+  Verificado: 4 rutas 307 sin fuga anónima, login 200, 3 pantallas 200 con datos, venta
+  real (2 x AZU-001, ARS 3.600,00) con stock 60→58, pago, línea y movimiento coherentes,
+  y reporte del día mostrando el total.
 - **T8 — Documentación y demo.** README con arquitectura y decisiones técnicas, más el
   recorrido de 10 minutos. Specs: S10. Ruta: inline. Commit: `688fba8`
 
@@ -172,3 +176,22 @@ Decisión de deploy: proyecto Supabase nuevo `caja-inventario` (no reutilizar
 `ecommerce-futbol`, para no compartir credenciales entre dos apps), `DATABASE_URL` poolada
 (6543) y `DIRECT_URL` directa (5432), con Session pooler como respaldo si la directa
 resuelve sólo a IPv6 en WSL.
+
+**L20 — Primer deploy y sus tres piedras.** El deploy real (Supabase + Vercel) falló dos
+veces por causas distintas que ningún test local podía atrapar. (a) `next build` en un
+clone limpio muere con `module-not-found` en `src/lib/db.ts`: el cliente de Prisma 7 se
+emite como fuente TS en `generated/`, que git ignora, y sólo lo generaba una corrida manual
+en esta máquina — la cura es `postinstall: prisma generate`, verificado borrando
+`generated/` y compilando. (b) La conexión directa de Supabase es IPv6 y `db.<ref>
+.supabase.co` no resuelve desde WSL (ENOTFOUND en A y AAAA), así que `DIRECT_URL` pasa al
+Session pooler (5432), que sí publica IPv4; el transaction pooler (6543) queda para la app.
+(c) El build de Vercel necesita `DATABASE_URL` porque Next importa cada route module al
+recolectar configuración y `src/lib/db.ts` valida la variable al importarse. La decisión de
+no hacer perezoso al cliente fue deliberada: fallar en el build nombrando la variable es
+mejor que desplegar verde y romper con un timeout en la primera venta.
+
+*Smoke real contra producción*: 4 rutas 307 sin cuerpo para anónimos, login 200 con cookie
+firmada en Node y validada en el middleware Edge, 3 pantallas 200 con datos del pooler, y
+una venta de 2 x AZU-001 (ARS 3.600,00) que dejó stock 60→58, `Pago` por el total,
+`MovimientoStock` SALIDA 2 con `stockLuego` 58 y el reporte del día cuadrando. Advisory
+abierto: Next 16 deprecó `middleware.ts` en favor de `proxy.ts` (todavía funciona).
