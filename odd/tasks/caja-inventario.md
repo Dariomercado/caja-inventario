@@ -260,8 +260,8 @@ ante cualquier fallo de la transacción —no solo `P2002`— y se devuelve solo
 coincide en usuario, cantidades por producto y firma de pagos; si no, se lanza
 `ClaveIdempotenciaReutilizadaError` y la acción lo muestra. El índice único sigue siendo la
 garantía; la consulta no lo reemplaza, solo evita perder el reintento que ya no encuentra
-stock. Dos tests nuevos fallan contra el código anterior y pasan con el arreglo (reintento
-tras agotar stock, y clave reusada con otro carrito u otro medio). 59/59 tests, lint, `tsc`
+stock. Un test nuevo cubre los dos casos y falla contra el código anterior —reintento tras
+agotar stock, y clave reusada con otro carrito u otro medio—. 59/59 tests, lint, `tsc`
 y build en verde.
 
 El validador dirigido aceptó las cinco findings como resueltas y **rechazó** la corrección
@@ -272,3 +272,24 @@ fallo y rota solo tras una venta confirmada. Así un reintento o no registra nad
 la venta que ese mismo envío ya había registrado, y un carrito editado con la clave vieja
 falla de forma visible en lugar de duplicar o descartar. El linaje quedó en `escalated`
 (terminal): la corrección acotada ya se usó. Spec: S11.
+
+**L24 — Cierre de la revisión nativa, producción verificada y un formulario que ya no
+depende de un contexto seguro.** Con las lentes en `thinking: low` las tres que faltaban
+(resilience, readability, reliability) por fin emitieron veredicto: con `medium` el
+razonamiento se comía los 39.416 tokens de salida y el revisor no dejaba texto. El linaje
+`review-86c4124f87c95b7a` cerró `approved` sin correcciones y con cinco hallazgos no
+bloqueantes. Correr las tres lentes en paralelo devolvía 429 del proveedor, así que van de
+a una.
+
+La migración de producción ya estaba aplicada (2026-11-18 05:42 UTC) y no se dio por
+sentado: se verificó con SQL contra la base —la columna y el índice único existen— porque
+`migrate status` solo lee `_prisma_migrations` y diría «al día» aunque el DDL hubiera
+fallado.
+
+Del review salieron dos arreglos reales. El conteo del README decía 58 tests y son 59 (el
+review los atribuyó todos a T9: T9 agregó cuatro, el quinto lo trajo la corrección). Y el
+formulario sorteaba la clave con `crypto.randomUUID()`, que no existe en un contexto no
+seguro (una demo en LAN por HTTP plano): ahí la pantalla tiraba excepción al renderizar.
+Ahora `nuevaClaveIdempotencia()` usa `randomUUID`, cae a `getRandomValues` y, sin ninguna
+API de `crypto`, a `Math.random`; los tres caminos tienen test. La unicidad que importa no
+depende de nada de eso: la garantiza el índice único. Spec: S11.

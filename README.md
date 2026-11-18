@@ -196,6 +196,7 @@ fallido cada una:
 | Bloqueo en orden de id | Evita deadlocks entre ventas con ítems en orden distinto |
 | Total calculado en el servidor | El navegador no puede decidir cuánto se cobra |
 | Clave de idempotencia con índice único | Un doble clic o un reintento no puede cobrar dos veces |
+| Clave con fallback de `crypto` | `randomUUID` no existe en contexto no seguro; un formulario que no renderiza es peor que una clave más débil, y la unicidad la da el índice |
 | Usuario de la venta desde la sesión | Un `usuarioId` del formulario sería atribución falsificable |
 | Guard en middleware | Un guard en el layout filtra datos: renderiza en paralelo con la página |
 | Sesión firmada con HMAC, no JWT | Sin dependencias, y el formato se audita en 40 líneas |
@@ -210,7 +211,7 @@ plataforma.
 
 ## Estado
 
-Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 58
+Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 59
 tests. Verificado en producción: rutas protegidas sin fuga de datos (307 anónimo con cuerpo
 vacío), login con cookie firmada validada en el middleware, y una venta real de 2 unidades
 con su descuento de stock, su pago y el reporte del día cuadrando.

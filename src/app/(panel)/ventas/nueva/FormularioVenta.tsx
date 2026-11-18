@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useMemo, useState } from 'react'
 import { formatearCentavos } from '@/lib/dinero'
+import { nuevaClaveIdempotencia } from '@/lib/claveIdempotencia'
 import { accionRegistrarVenta } from '@/app/actions/ventas'
 
 type Producto = {
@@ -31,7 +32,9 @@ export function FormularioVenta({ productos }: { productos: Producto[] }) {
   // solo después de una venta exitosa. Si un envío falla, la clave se conserva a
   // propósito: un fallo puede significar que la venta sí se registró y se perdió la
   // respuesta. Renovar la clave ahí abriría la puerta a registrarla dos veces.
-  const [claveIdempotencia, setClaveIdempotencia] = useState(() => crypto.randomUUID())
+  // La clave se sortea con fallback: `crypto.randomUUID` no existe en contextos no
+  // seguros (HTTP plano) y ahí el formulario no puede romperse al renderizar.
+  const [claveIdempotencia, setClaveIdempotencia] = useState(() => nuevaClaveIdempotencia())
 
   const porId = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos])
 
@@ -92,7 +95,7 @@ export function FormularioVenta({ productos }: { productos: Producto[] }) {
         `Venta #${resultado.numero} registrada por ${formatearCentavos(resultado.totalCentavos)}.`,
       )
       // Venta cerrada: la próxima venta es otro intento y necesita otra clave.
-      setClaveIdempotencia(crypto.randomUUID())
+      setClaveIdempotencia(nuevaClaveIdempotencia())
       setLineas([])
       router.refresh()
     } catch {
