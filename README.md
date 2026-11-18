@@ -211,7 +211,7 @@ plataforma.
 
 ## Estado
 
-Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 59
+Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 62
 tests. Verificado en producción: rutas protegidas sin fuga de datos (307 anónimo con cuerpo
 vacío), login con cookie firmada validada en el middleware, y una venta real de 2 unidades
 con su descuento de stock, su pago y el reporte del día cuadrando.

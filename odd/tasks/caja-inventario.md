@@ -293,3 +293,7 @@ seguro (una demo en LAN por HTTP plano): ahí la pantalla tiraba excepción al r
 Ahora `nuevaClaveIdempotencia()` usa `randomUUID`, cae a `getRandomValues` y, sin ninguna
 API de `crypto`, a `Math.random`; los tres caminos tienen test. La unicidad que importa no
 depende de nada de eso: la garantiza el índice único. Spec: S11.
+
+**L25 — Seguimiento del review de `6d4e853`: un test que no discriminaba y un conteo que envejeció.** La revisión `review-76decb9a820284ae` (readability + reliability) aprobó el candidato sin correcciones y dejó tres hallazgos no bloqueantes. Dos apuntaban al mismo defecto de verificación: el test del escalón `getRandomValues` sólo afirmaba forma de UUID v4 y unicidad, cosas que el último recurso (`Math.random`) también cumple, así que si el dispatch al escalón intermedio se rompiera el test seguiría en verde. Ahora el stub se afirma con `toHaveBeenCalledTimes(1)` y rellena bytes fijos, de modo que la salida esperada es un UUID concreto: se probó por mutación —cambiando el branch por `if (false)`— y el test falla con `expected '163b8f52-…' to be '00010203-0405-4607-8809-0a0b0c0d0e0f'`, o sea discrimina de verdad.
+
+El tercer hallazgo (`R2-001`) afirmaba que el README debía decir 61 tests. Estaba equivocado —la base eran 59 y el archivo nuevo agrega tres—, pero dejó a la vista algo real: el README decía 59 y la suite ya tiene 62. Corregido. Los tres hallazgos quedan cerrados acá; no queda nada pendiente de esta revisión.

@@ -5,11 +5,6 @@ import { nuevaClaveIdempotencia } from './claveIdempotencia'
 // variante en 8, 9, a o b.
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
-function rellenarAlAzar(bytes: Uint8Array): Uint8Array {
-  for (let i = 0; i < bytes.length; i += 1) bytes[i] = Math.floor(Math.random() * 256)
-  return bytes
-}
-
 afterEach(() => {
   vi.unstubAllGlobals()
 })
@@ -23,15 +18,19 @@ describe('nuevaClaveIdempotencia', () => {
     expect(randomUUID).toHaveBeenCalledTimes(1)
   })
 
-  it('cae a getRandomValues sin randomUUID, en vez de romper el formulario', () => {
+  it('cae a getRandomValues sin randomUUID, sin bajar al último recurso', () => {
     // Contexto no seguro (LAN por HTTP plano) o navegador viejo: getRandomValues
-    // existe, randomUUID no. Renderizar el formulario no puede tirar excepción.
-    vi.stubGlobal('crypto', { getRandomValues: rellenarAlAzar })
+    // existe, randomUUID no. Los bytes son fijos para distinguir este escalón del
+    // fallback a Math.random: si el dispatch se rompiera, el UUID esperado —y el
+    // conteo de llamadas— no coincidirían, así que el test no da falsa confianza.
+    const getRandomValues = vi.fn((bytes: Uint8Array) => {
+      for (let i = 0; i < bytes.length; i += 1) bytes[i] = i
+      return bytes
+    })
+    vi.stubGlobal('crypto', { getRandomValues })
 
-    const clave = nuevaClaveIdempotencia()
-
-    expect(clave).toMatch(UUID_V4)
-    expect(nuevaClaveIdempotencia()).not.toBe(clave)
+    expect(nuevaClaveIdempotencia()).toBe('00010203-0405-4607-8809-0a0b0c0d0e0f')
+    expect(getRandomValues).toHaveBeenCalledTimes(1)
   })
 
   it('no tira excepción cuando no hay crypto disponible en absoluto', () => {
