@@ -136,13 +136,23 @@ usar la equivocada falla de forma poco obvia:
 | `DIRECT_URL` | directa (puerto 5432) | migraciones, que necesitan locks que el pooler no da |
 | `SESSION_SECRET` | — | nuevo `openssl rand -hex 32`, **distinto** al de desarrollo |
 
-Antes del primer deploy hay que crear el esquema en la base de producción:
+Antes del primer deploy hay que crear el esquema en la base de producción. Se usa
+`migrate deploy`, **no** `migrate dev`: el segundo es interactivo, puede proponer un
+`reset` y está pensado para evolucionar el schema en desarrollo.
 
 ```bash
-DIRECT_URL="<url directa>" npm run db:migrate
+npm run db:migrate:prod     # prisma migrate deploy; toma DIRECT_URL del .env
 ```
 
-Y no correr `db:seed` contra producción: siembra el catálogo de demostración.
+Y después del `migrate deploy` hay que sembrar la base una única vez:
+
+```bash
+npm run db:seed
+```
+
+El seed es **idempotente** (`upsert`, no borra nada) y es lo que crea el usuario de demo: sin
+él no hay con qué loguearse en producción. Las credenciales de demo son públicas a
+propósito, porque es un entorno de demostración con datos de demostración.
 
 ## Decisiones y por qué
 

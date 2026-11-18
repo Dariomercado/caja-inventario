@@ -159,3 +159,16 @@ autenticada: cada request necesita la sesión.
 autoradas. T5 y T6 no se separaron porque el guard de rutas sólo tiene sentido donde hay
 páginas que proteger: sin UI, habría sido código muerto. Queda registrado como desvío y
 no como decisión cómoda.
+
+**L19 — Camino a producción corregido.** Tres defectos del camino crítico de T7: (a) el
+README indicaba `migrate dev` contra producción, que es interactivo y puede proponer un
+`reset`; se agrega `db:migrate:prod` (`prisma migrate deploy`), verificado contra la base
+local con exit 0; (b) `.gitignore` ignoraba `.env.example` a través de `.env*`, así que el
+`cp .env.example .env` del README no podía funcionar — se agrega la excepción, y los dos
+archivos los crea Dario a mano porque la política de seguridad del agente bloquea
+escrituras sobre `.env*`; (c) el README prohibía sembrar producción, pero el seed es
+idempotente y es lo único que crea el usuario de login: sin él el deploy queda sin acceso.
+Decisión de deploy: proyecto Supabase nuevo `caja-inventario` (no reutilizar
+`ecommerce-futbol`, para no compartir credenciales entre dos apps), `DATABASE_URL` poolada
+(6543) y `DIRECT_URL` directa (5432), con Session pooler como respaldo si la directa
+resuelve sólo a IPv6 en WSL.
