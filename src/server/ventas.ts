@@ -29,6 +29,10 @@ export type PagoVenta = { medio: MedioPagoVenta; montoCentavos: number }
 
 export type RegistrarVentaInput = {
   usuarioId: string
+  // Identifica el intento de venta. Si el mismo intento llega dos veces (doble
+  // clic, reintento del navegador, un proxy que reenvía el POST), la segunda vez
+  // devuelve la venta ya creada en lugar de registrar otra.
+  claveIdempotencia: string
   items: ItemVenta[]
   // Exactamente uno de los dos: o se detallan los pagos, o se indica un único
   // medio y el monto sale del total calculado dentro de la transacción. El segundo
@@ -67,11 +71,55 @@ type ProductoBloqueado = {
  *    ítems. Sin eso, dos ventas con los mismos productos en orden inverso se
  *    esperarían mutuamente hasta el timeout: un deadlock que en producción
  *    aparece una vez cada tanto y es dificilísimo de reproducir.
+ *
+ * 3. La clave de idempotencia se guarda con índice único. Un segundo envío del
+ *    mismo intento choca contra el índice, su transacción se revierte entera
+ *    (sin descontar stock) y se devuelve la venta que ya existía.
  */
-export async function registrarVenta(
-  input: RegistrarVentaInput,
-): Promise<VentaRegistrada> {
-  const { usuarioId, items, pagos, medioPago } = input
+export async function registrarVenta(input: RegistrarVentaInput): Promise<VentaRegistrada> {
+  const { usuarioId, claveIdempotencia } = input
+
+  if (typeof claveIdempotencia !== 'string' || claveIdempotencia.trim() === '') {
+    throw new Error('La venta necesita una clave de idempotencia')
+  }
+  if (claveIdempotencia.length > 200) {
+    throw new Error('La clave de idempotencia es demasiado larga (máximo 200 caracteres)')
+  }
+
+  try {
+    return await ventaEnTransaccion(input)
+  } catch (error) {
+    // El índice único hizo su trabajo: esta transacción ya se revirtió sin tocar
+    // el stock, así que lo correcto no es fallar sino contar lo que sí pasó. La
+    // transacción ganadora ya está confirmada: Postgres no rechaza el duplicado
+    // hasta que la otra termina.
+    if (esConflictoDeClave(error)) {
+      const existente = await prisma.venta.findUnique({ where: { claveIdempotencia } })
+      if (existente && existente.usuarioId === usuarioId) {
+        return {
+          id: existente.id,
+          numero: existente.numero,
+          totalCentavos: existente.totalCentavos,
+        }
+      }
+    }
+
+    throw error
+  }
+}
+
+/**
+ * Prisma señala una violación de índice único con el código P2002. No se mira
+ * `meta.target`: puede venir ausente según el driver, y de todos modos lo único
+ * que decide es si existe una venta con esa clave, que es lo que se consulta.
+ */
+function esConflictoDeClave(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false
+  return (error as { code?: unknown }).code === 'P2002'
+}
+
+async function ventaEnTransaccion(input: RegistrarVentaInput): Promise<VentaRegistrada> {
+  const { usuarioId, items, pagos, medioPago, claveIdempotencia } = input
 
   if (items.length === 0) {
     throw new Error('La venta necesita al menos un ítem')
@@ -155,6 +203,7 @@ export async function registrarVenta(
     const venta = await tx.venta.create({
       data: {
         usuarioId,
+        claveIdempotencia,
         totalCentavos,
         lineas: { create: lineas },
         pagos: {

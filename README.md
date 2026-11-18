@@ -14,7 +14,7 @@ En producción: <https://caja-inventario-sage.vercel.app> — login de demo `adm
 - **Reportes**: ventas por día, productos más vendidos y caja del día por medio de pago.
 - **Login** de un rol con sesión firmada.
 
-## Las tres cosas que vale mirar
+## Las cuatro cosas que vale mirar
 
 Si vas a leer sólo un archivo, que sea `src/server/ventas.ts`.
 
@@ -46,6 +46,18 @@ Los reportes calculan los límites del día en `America/Argentina/Buenos_Aires`,
 Una venta de las 23:30 ya pertenece al día siguiente en UTC; sin ese manejo, la caja diaria
 no cierra. También verificado por mutación: cambiando la zona a UTC, el test de la venta de
 las 23:30 falla.
+
+### 4. Un doble clic no registra dos ventas
+
+`FOR UPDATE` serializa ventas **distintas**; no evita que el **mismo** envío llegue dos
+veces. Para eso cada intento de venta lleva una clave de idempotencia que genera el
+formulario, y `Venta.claveIdempotencia` tiene índice único.
+
+Si el segundo envío llega, su transacción choca contra el índice, se revierte entera (sin
+descontar stock) y devuelve la venta que ya existía: el usuario ve el mismo comprobante, no
+un error. No hay ventana entre "consultar si existe" y "escribir", porque la garantía es la
+restricción de la base, no una consulta previa. Deshabilitar el botón mientras envía ayuda,
+pero no alcanza: no cubre un reintento del navegador ni un proxy que reenvía el POST.
 
 ## Stack
 
@@ -181,6 +193,7 @@ fallido cada una:
 | Stock como columna + libro mayor | Permite `FOR UPDATE` y mantiene la historia auditable |
 | Bloqueo en orden de id | Evita deadlocks entre ventas con ítems en orden distinto |
 | Total calculado en el servidor | El navegador no puede decidir cuánto se cobra |
+| Clave de idempotencia con índice único | Un doble clic o un reintento no puede cobrar dos veces |
 | Usuario de la venta desde la sesión | Un `usuarioId` del formulario sería atribución falsificable |
 | Guard en middleware | Un guard en el layout filtra datos: renderiza en paralelo con la página |
 | Sesión firmada con HMAC, no JWT | Sin dependencias, y el formato se audita en 40 líneas |
@@ -195,7 +208,7 @@ plataforma.
 
 ## Estado
 
-Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 54
+Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 58
 tests. Verificado en producción: rutas protegidas sin fuga de datos (307 anónimo con cuerpo
 vacío), login con cookie firmada validada en el middleware, y una venta real de 2 unidades
 con su descuento de stock, su pago y el reporte del día cuadrando.

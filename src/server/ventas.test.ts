@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { prisma } from '../lib/db'
 import { crearProducto, crearUsuario } from '../test/fixtures'
@@ -14,6 +15,7 @@ describe('registrarVenta', () => {
 
     const venta = await registrarVenta({
       usuarioId: usuario.id,
+      claveIdempotencia: randomUUID(),
       items: [{ productoId: producto.id, cantidad: 3 }],
       pagos: [{ medio: 'EFECTIVO', montoCentavos: 450_000 }],
     })
@@ -51,6 +53,7 @@ describe('registrarVenta', () => {
     await expect(
       registrarVenta({
         usuarioId: usuario.id,
+        claveIdempotencia: randomUUID(),
         items: [{ productoId: producto.id, cantidad: 3 }],
         pagos: [{ medio: 'EFECTIVO', montoCentavos: 300_000 }],
       }),
@@ -75,6 +78,7 @@ describe('registrarVenta', () => {
     const intentar = () =>
       registrarVenta({
         usuarioId: usuario.id,
+        claveIdempotencia: randomUUID(),
         items: [{ productoId: producto.id, cantidad: 1 }],
         pagos: [{ medio: 'EFECTIVO', montoCentavos: 100_000 }],
       })
@@ -102,6 +106,7 @@ describe('registrarVenta', () => {
 
     const ventaUno = registrarVenta({
       usuarioId: usuario.id,
+      claveIdempotencia: randomUUID(),
       items: [
         { productoId: a.id, cantidad: 1 },
         { productoId: b.id, cantidad: 1 },
@@ -110,6 +115,7 @@ describe('registrarVenta', () => {
     })
     const ventaDos = registrarVenta({
       usuarioId: usuario.id,
+      claveIdempotencia: randomUUID(),
       items: [
         { productoId: b.id, cantidad: 1 },
         { productoId: a.id, cantidad: 1 },
@@ -132,6 +138,7 @@ describe('registrarVenta', () => {
 
     const venta = await registrarVenta({
       usuarioId: usuario.id,
+      claveIdempotencia: randomUUID(),
       items: [{ productoId: producto.id, cantidad: 1 }],
       pagos: [{ medio: 'EFECTIVO', montoCentavos: 100_000 }],
     })
@@ -152,6 +159,7 @@ describe('registrarVenta', () => {
 
     const venta = await registrarVenta({
       usuarioId: usuario.id,
+      claveIdempotencia: randomUUID(),
       items: [{ productoId: producto.id, cantidad: 2 }],
       medioPago: 'TRANSFERENCIA',
     })
@@ -170,6 +178,7 @@ describe('registrarVenta', () => {
     await expect(
       registrarVenta({
         usuarioId: usuario.id,
+        claveIdempotencia: randomUUID(),
         items: [{ productoId: producto.id, cantidad: 1 }],
       }),
     ).rejects.toThrow(/pagos o un único medio/)
@@ -182,6 +191,7 @@ describe('registrarVenta', () => {
     await expect(
       registrarVenta({
         usuarioId: usuario.id,
+        claveIdempotencia: randomUUID(),
         items: [{ productoId: producto.id, cantidad: 2 }],
         pagos: [{ medio: 'EFECTIVO', montoCentavos: 100_000 }],
       }),
@@ -192,5 +202,93 @@ describe('registrarVenta', () => {
       where: { id: producto.id },
     })
     expect(productoDespues.stock).toBe(5)
+  })
+
+  it('registra una sola venta cuando la misma clave llega dos veces', async () => {
+    const usuario = await crearUsuario()
+    const producto = await crearProducto({ precioCentavos: 100_000, stock: 10 })
+    const clave = randomUUID()
+
+    const intento = {
+      usuarioId: usuario.id,
+      claveIdempotencia: clave,
+      items: [{ productoId: producto.id, cantidad: 2 }],
+      medioPago: 'EFECTIVO' as const,
+    }
+
+    const primera = await registrarVenta(intento)
+    const segunda = await registrarVenta(intento)
+
+    // El segundo envío no es un error: devuelve la venta que ya existe.
+    expect(segunda.numero).toBe(primera.numero)
+    expect(segunda.totalCentavos).toBe(200_000)
+
+    expect(await prisma.venta.count()).toBe(1)
+    expect(await prisma.lineaVenta.count()).toBe(1)
+    expect(await prisma.movimientoStock.count()).toBe(1)
+
+    // El efecto que un doble clic rompía: el stock se descuenta una sola vez.
+    const productoDespues = await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } })
+    expect(productoDespues.stock).toBe(8)
+  })
+
+  it('no descuenta stock dos veces cuando dos envíos simultáneos comparten la clave', async () => {
+    const usuario = await crearUsuario()
+    const producto = await crearProducto({ precioCentavos: 100_000, stock: 10 })
+    const clave = randomUUID()
+
+    const intento = {
+      usuarioId: usuario.id,
+      claveIdempotencia: clave,
+      items: [{ productoId: producto.id, cantidad: 2 }],
+      medioPago: 'EFECTIVO' as const,
+    }
+
+    // Acá el respaldo real es el índice único: no hay ventana entre consultar y
+    // escribir que dos peticiones puedan aprovechar.
+    const resultados = await Promise.all([registrarVenta(intento), registrarVenta(intento)])
+
+    expect(resultados[0].numero).toBe(resultados[1].numero)
+    expect(await prisma.venta.count()).toBe(1)
+
+    const productoDespues = await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } })
+    expect(productoDespues.stock).toBe(8)
+  })
+
+  it('registra dos ventas cuando las claves son distintas', async () => {
+    const usuario = await crearUsuario()
+    const producto = await crearProducto({ precioCentavos: 100_000, stock: 10 })
+
+    const base = {
+      usuarioId: usuario.id,
+      items: [{ productoId: producto.id, cantidad: 2 }],
+      medioPago: 'EFECTIVO' as const,
+    }
+
+    const uno = await registrarVenta({ ...base, claveIdempotencia: randomUUID() })
+    const dos = await registrarVenta({ ...base, claveIdempotencia: randomUUID() })
+
+    // Dos ventas idénticas en contenido son legítimas: son dos clientes distintos.
+    expect(dos.numero).not.toBe(uno.numero)
+    expect(await prisma.venta.count()).toBe(2)
+
+    const productoDespues = await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } })
+    expect(productoDespues.stock).toBe(6)
+  })
+
+  it('exige una clave de idempotencia', async () => {
+    const usuario = await crearUsuario()
+    const producto = await crearProducto({ stock: 5 })
+
+    await expect(
+      registrarVenta({
+        usuarioId: usuario.id,
+        claveIdempotencia: '   ',
+        items: [{ productoId: producto.id, cantidad: 1 }],
+        medioPago: 'EFECTIVO',
+      }),
+    ).rejects.toThrow(/clave de idempotencia/)
+
+    expect(await prisma.venta.count()).toBe(0)
   })
 })

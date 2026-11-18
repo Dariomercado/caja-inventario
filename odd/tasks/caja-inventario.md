@@ -42,6 +42,11 @@ máquina resuelve a un binario de Windows.
 **S10 — Verificable en 10 minutos.** Existe un recorrido de demo que muestra el sistema
 completo —login, venta, reporte— en una sola grabación de 10 minutos o menos.
 
+**S11 — La misma venta no se registra dos veces.** Cada intento de venta lleva una clave
+de idempotencia que el formulario genera, con índice único en la base. Un segundo envío
+del mismo intento devuelve la venta ya registrada y **no** vuelve a descontar stock.
+> "no se si tengo una clave de idempotencia o guard de transaccion para evitar una venta registrada dos veces, fijate y si no lo hay implementalo."
+
 ## Tasks
 
 - **T1 — Andamiaje y entorno.** Next.js + TS + Tailwind + Prisma + Vitest; Docker Compose
@@ -72,6 +77,12 @@ completo —login, venta, reporte— en una sola grabación de 10 minutos o meno
   y reporte del día mostrando el total.
 - **T8 — Documentación y demo.** README con arquitectura y decisiones técnicas, más el
   recorrido de 10 minutos. Specs: S10. Ruta: inline. Commit: `688fba8`
+- **T9 — Idempotencia de la venta.** Columna `Venta.claveIdempotencia` con índice único y
+  migración; `registrarVenta` la exige y devuelve la venta existente ante un duplicado;
+  la acción y el formulario la generan y la renuevan sólo tras una venta exitosa. Cuatro
+  tests nuevos, incluido el de dos envíos simultáneos con la misma clave. Specs: S11.
+  Ruta: inline (alto riesgo: cambio de schema en una base con datos). Commit:
+  `0d00b82`
 
 ## Log
 
@@ -195,3 +206,39 @@ firmada en Node y validada en el middleware Edge, 3 pantallas 200 con datos del 
 una venta de 2 x AZU-001 (ARS 3.600,00) que dejó stock 60→58, `Pago` por el total,
 `MovimientoStock` SALIDA 2 con `stockLuego` 58 y el reporte del día cuadrando. Advisory
 abierto: Next 16 deprecó `middleware.ts` en favor de `proxy.ts` (todavía funciona).
+
+**L21** — Pedido de Dario sobre idempotencia, textual:
+> "no se si tengo una clave de idempotencia o guard de transaccion para evitar una venta registrada dos veces, fijate y si no lo hay implementalo."
+
+No existía: el único guard era `FOR UPDATE`, que serializa ventas **distintas** y no
+impide que el mismo envío llegue dos veces. Con stock disponible, un doble clic registraba
+dos ventas y descontaba el stock dos veces. Implementado: `Venta.claveIdempotencia String?
+@unique` (nullable porque las ventas históricas no la tienen y Postgres admite varios NULL
+en un índice único) más `registrarVenta` recibiendo la clave y traduciendo el `P2002` del
+índice único en "devolvé la venta que ya existe". La garantía es la restricción de la base,
+no una consulta previa: no hay ventana entre mirar y escribir, y la transacción perdedora
+se revierte entera sin tocar el stock. El formulario sortea la clave al montarse y la
+renueva sólo después de una venta exitosa, porque reintentar un envío fallido con la misma
+clave es seguro.
+
+Sobre la migración: `migrate deploy` ignora la `DATABASE_URL` del entorno cuando existe
+`DIRECT_URL` (el config prefiere la directa), así que la primera corrida apuntó a la base
+de desarrollo. La base de test necesitó `DIRECT_URL` y `DATABASE_URL` apuntando a
+`caja_test` para recibir la columna. Los 58 tests pasan contra `caja_test`.
+
+**L22 — Verificación independiente de T9 y cierre.** El verificador cumplió 6/6 specs y
+aportó la prueba que faltaba: quitando el índice único, tres envíos concurrentes con la
+misma clave vuelven a crear tres ventas, así que la deduplicación no depende de ninguna
+consulta previa. También cubrió el caso que `FOR UPDATE` no serializa —misma clave con
+productos distintos— y confirmó que los tests nuevos fallan contra el código anterior
+(3 de 4; el cuarto cuida de no deduplicar de más). Advisory corregido: la acción rechazaba
+`''` pero no `'   '`, mientras el servicio sí, así que una clave en blanco mostraba el
+mensaje genérico. Advisory aceptado sin cambio: `CREATE UNIQUE INDEX` no es `CONCURRENTLY`,
+irrelevante con esta tabla y anotado para cuando crezca.
+
+**Bloqueo de la revisión nativa.** Los tres reviewers no arrancan porque el perfil de
+agentes de la sesión no tiene modelo asignado para `review-risk`, `review-resilience` ni
+`review-reliability` (`profiles.json`, roles por perfil). El agente no puede escribir ese
+archivo: la configuración de modelos está declarada como controlada por el humano. El
+linaje `review-a75ef511611ce77c` quedó abierto sobre un candidato previo al arreglo, así que
+la revisión tiene que empezar de nuevo una vez que los roles existan.

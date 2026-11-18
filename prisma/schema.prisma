@@ -89,13 +89,17 @@ model MovimientoStock {
 }
 
 model Venta {
-  id            String   @id @default(cuid())
+  id                String   @id @default(cuid())
   // Número legible para el comprobante; el id cuid es interno.
-  numero        Int      @unique @default(autoincrement())
-  usuarioId     String
-  usuario       Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
-  totalCentavos Int
-  createdAt     DateTime @default(now())
+  numero            Int      @unique @default(autoincrement())
+  usuarioId         String
+  usuario           Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  totalCentavos     Int
+  // Clave que manda el cliente para que un reenvío del mismo formulario no cree
+  // una segunda venta. Nullable porque las ventas históricas no la tienen, y
+  // Postgres admite varios NULL en un índice único.
+  claveIdempotencia String?  @unique
+  createdAt         DateTime @default(now())
 
   lineas      LineaVenta[]
   pagos       Pago[]
