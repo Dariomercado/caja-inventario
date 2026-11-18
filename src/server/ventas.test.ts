@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { prisma } from '../lib/db'
 import { crearProducto, crearUsuario } from '../test/fixtures'
-import { PagoInconsistenteError, StockInsuficienteError, registrarVenta } from './ventas'
+import {
+  ClaveIdempotenciaReutilizadaError,
+  PagoInconsistenteError,
+  StockInsuficienteError,
+  registrarVenta,
+} from './ventas'
 
 // Los tests verifican efectos observables: el stock que queda, las filas que se
 // escriben y las que NO se escriben cuando la venta se rechaza. Nunca miran
@@ -230,6 +235,36 @@ describe('registrarVenta', () => {
     // El efecto que un doble clic rompía: el stock se descuenta una sola vez.
     const productoDespues = await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } })
     expect(productoDespues.stock).toBe(8)
+  })
+
+  it('un reintento con la misma clave devuelve la venta, y con otro carrito la rechaza', async () => {
+    const usuario = await crearUsuario()
+    // Stock justo: la primera venta lo agota, así que un reintento no llega nunca al
+    // índice único, falla antes en la validación de stock.
+    const producto = await crearProducto({ precioCentavos: 100_000, stock: 2 })
+    const intento = {
+      usuarioId: usuario.id,
+      claveIdempotencia: randomUUID(),
+      items: [{ productoId: producto.id, cantidad: 2 }],
+      medioPago: 'EFECTIVO' as const,
+    }
+
+    const primera = await registrarVenta(intento)
+    expect((await registrarVenta(intento)).numero).toBe(primera.numero)
+
+    // Devolver el comprobante viejo sería reportar como vendido un carrito que nunca
+    // se registró: su stock no se descontaría y la venta se perdería en silencio.
+    await expect(
+      registrarVenta({ ...intento, items: [{ productoId: producto.id, cantidad: 1 }] }),
+    ).rejects.toBeInstanceOf(ClaveIdempotenciaReutilizadaError)
+    // El mismo carrito con otro medio: el total no cambia, comparar importes no alcanza.
+    await expect(registrarVenta({ ...intento, medioPago: 'TARJETA' })).rejects.toBeInstanceOf(
+      ClaveIdempotenciaReutilizadaError,
+    )
+
+    expect(await prisma.venta.count()).toBe(1)
+    const despues = await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } })
+    expect(despues.stock).toBe(0)
   })
 
   it('no descuenta stock dos veces cuando dos envíos simultáneos comparten la clave', async () => {

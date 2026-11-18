@@ -28,8 +28,9 @@ export function FormularioVenta({ productos }: { productos: Producto[] }) {
   const [exito, setExito] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   // Una clave por intento de venta. Se sortea al montar el formulario y se renueva
-  // solo después de una venta exitosa: si un envío falla, reintentar con la misma
-  // clave es seguro, porque el servidor no llegó a registrar nada.
+  // solo después de una venta exitosa. Si un envío falla, la clave se conserva a
+  // propósito: un fallo puede significar que la venta sí se registró y se perdió la
+  // respuesta. Renovar la clave ahí abriría la puerta a registrarla dos veces.
   const [claveIdempotencia, setClaveIdempotencia] = useState(() => crypto.randomUUID())
 
   const porId = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos])

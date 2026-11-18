@@ -21,6 +21,13 @@ export class PagoInconsistenteError extends Error {
   }
 }
 
+export class ClaveIdempotenciaReutilizadaError extends Error {
+  constructor(readonly claveIdempotencia: string) {
+    super('La clave de idempotencia ya se usó para otra venta')
+    this.name = 'ClaveIdempotenciaReutilizadaError'
+  }
+}
+
 export type MedioPagoVenta = 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA'
 
 export type ItemVenta = { productoId: string; cantidad: number }
@@ -77,7 +84,7 @@ type ProductoBloqueado = {
  *    (sin descontar stock) y se devuelve la venta que ya existía.
  */
 export async function registrarVenta(input: RegistrarVentaInput): Promise<VentaRegistrada> {
-  const { usuarioId, claveIdempotencia } = input
+  const { claveIdempotencia } = input
 
   if (typeof claveIdempotencia !== 'string' || claveIdempotencia.trim() === '') {
     throw new Error('La venta necesita una clave de idempotencia')
@@ -86,36 +93,40 @@ export async function registrarVenta(input: RegistrarVentaInput): Promise<VentaR
     throw new Error('La clave de idempotencia es demasiado larga (máximo 200 caracteres)')
   }
 
+  // El stock o el índice único pueden rechazar un reintento que ya se registró: se
+  // busca la venta de esa clave antes de dar el error por bueno.
   try {
     return await ventaEnTransaccion(input)
   } catch (error) {
-    // El índice único hizo su trabajo: esta transacción ya se revirtió sin tocar
-    // el stock, así que lo correcto no es fallar sino contar lo que sí pasó. La
-    // transacción ganadora ya está confirmada: Postgres no rechaza el duplicado
-    // hasta que la otra termina.
-    if (esConflictoDeClave(error)) {
-      const existente = await prisma.venta.findUnique({ where: { claveIdempotencia } })
-      if (existente && existente.usuarioId === usuarioId) {
-        return {
-          id: existente.id,
-          numero: existente.numero,
-          totalCentavos: existente.totalCentavos,
-        }
-      }
+    const previa = await ventaPorClave(claveIdempotencia)
+    if (!previa) throw error
+    // Devolverla solo es honesto si el intento es el mismo: con otro carrito u otro
+    // medio de pago, el comprobante viejo descartaría en silencio la venta nueva.
+    const pedido = firma(input, previa.totalCentavos)
+    const guardado = firma({ items: previa.lineas, pagos: previa.pagos }, previa.totalCentavos)
+    if (previa.usuarioId !== input.usuarioId || pedido !== guardado) {
+      throw new ClaveIdempotenciaReutilizadaError(claveIdempotencia)
     }
-
-    throw error
+    return { id: previa.id, numero: previa.numero, totalCentavos: previa.totalCentavos }
   }
 }
 
-/**
- * Prisma señala una violación de índice único con el código P2002. No se mira
- * `meta.target`: puede venir ausente según el driver, y de todos modos lo único
- * que decide es si existe una venta con esa clave, que es lo que se consulta.
- */
-function esConflictoDeClave(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false
-  return (error as { code?: unknown }).code === 'P2002'
+function ventaPorClave(claveIdempotencia: string) {
+  return prisma.venta.findUnique({
+    where: { claveIdempotencia },
+    include: { lineas: true, pagos: true },
+  })
+}
+
+function firma(intento: Pick<RegistrarVentaInput, 'items' | 'pagos' | 'medioPago'>, total: number) {
+  const cantidades = new Map<string, number>()
+  for (const item of intento.items) {
+    cantidades.set(item.productoId, (cantidades.get(item.productoId) ?? 0) + item.cantidad)
+  }
+  const items = [...cantidades].sort().map(([id, cantidad]) => `${id}x${cantidad}`)
+  // Por el camino del formulario el pago viaja sin monto: el total lo pone el server.
+  const pagos = intento.pagos ?? [{ medio: intento.medioPago, montoCentavos: total }]
+  return [...items, ...pagos.map((p) => `${p.medio}:${p.montoCentavos}`).sort()].join('|')
 }
 
 async function ventaEnTransaccion(input: RegistrarVentaInput): Promise<VentaRegistrada> {

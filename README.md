@@ -55,9 +55,11 @@ formulario, y `Venta.claveIdempotencia` tiene índice único.
 
 Si el segundo envío llega, su transacción choca contra el índice, se revierte entera (sin
 descontar stock) y devuelve la venta que ya existía: el usuario ve el mismo comprobante, no
-un error. No hay ventana entre "consultar si existe" y "escribir", porque la garantía es la
-restricción de la base, no una consulta previa. Deshabilitar el botón mientras envía ayuda,
-pero no alcanza: no cubre un reintento del navegador ni un proxy que reenvía el POST.
+un error. La garantía es la restricción de la base, no la consulta previa; la consulta existe
+porque el reintento puede fallar por stock antes de llegar al índice. Y devolver el
+comprobante solo vale si el intento es el mismo: con otro carrito u otro medio de pago, la
+venta nueva se rechaza en vez de darse por registrada. Deshabilitar el botón mientras envía
+ayuda, pero no alcanza: no cubre un reintento del navegador ni un proxy que reenvía el POST.
 
 ## Stack
 

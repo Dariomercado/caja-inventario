@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requerirUsuario } from '@/server/sesion'
 import {
+  ClaveIdempotenciaReutilizadaError,
   PagoInconsistenteError,
   StockInsuficienteError,
   registrarVenta,
@@ -51,6 +52,11 @@ export async function accionRegistrarVenta(entrada: {
     }
     if (error instanceof PagoInconsistenteError) {
       return { ok: false, error: 'El pago no coincide con el total de la venta.' }
+    }
+    // La clave ya es de otra venta: no se registró nada, así que no hay comprobante
+    // que mostrar. El formulario arranca un intento limpio al reintentar.
+    if (error instanceof ClaveIdempotenciaReutilizadaError) {
+      return { ok: false, error: 'Esa venta ya se registró con otros datos. Recargá la página para registrar la nueva.' }
     }
 
     // Cualquier otra cosa se registra y se devuelve un mensaje sin detalles
