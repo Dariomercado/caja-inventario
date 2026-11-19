@@ -66,10 +66,14 @@ ejemplos `curl` de cada endpoint, ejecutables tal como están escritos.
 
 - **T1 — Modelo de tokens y emisión.** Modelo de token (hash, scopes, expiración,
   revocación, límite) + migración + comando de emisión en `scripts/`. Specs: S3, S4.
-  Ruta: inline (alto riesgo: seguridad).
+  Ruta: inline (alto riesgo: seguridad). Hecho: `TokenApi`/`UsoTokenApi`, scopes como
+  enum de Postgres con vocabulario propio en el contrato, `scripts/emitir-token.ts`
+  con guarda de host, 17 tests. Commit: `afd8a8d`.
 - **T2 — Autenticación y autorización de la API.** Resolución del bearer token,
   chequeo de scope por operación, y clamp común de errores. Tests de bypass: token
   ausente, hash mal, expirado, revocado, scope insuficiente. Specs: S3, S4, S7.
+  Hecho: `autenticar()` identifica antes de autorizar (401 nunca 403 para credencial
+  inválida), `errorJson` con código estable y clamp de internos. Commit: `6bfd3f0`.
 - **T3 — Rate limit.** Bucket persistido por token, ventana y `Retry-After`. Test de
   dos instancias lógicas sobre la misma tabla. Specs: S5.
 - **T4 — Endpoints de productos.** Listar/leer/crear/editar + ajuste de stock,
@@ -112,3 +116,20 @@ scopes". Descartadas: sólo lectura, y API como superficie del asistente primero
 `caja-inventario.md`: Vercel + Supabase, verificado en producción). No hay Dockerfile;
 "Docker" en L3 es imagen propia para deploy, no el `docker-compose.yml` de la base
 local que ya se usa.
+
+**L6 — Hallazgo de seguridad: toda migración local escribe en producción.**
+`prisma7.config.ts` resuelve `DIRECT_URL ?? DATABASE_URL`, y en esta máquina
+`DIRECT_URL` apunta al pooler de Supabase. Consecuencia: `npm run db:migrate` corre
+contra producción **aunque se pase `DATABASE_URL` inline**, porque `DIRECT_URL` gana.
+Verificado: `npx prisma migrate status` anunció
+`aws-1-us-east-1.pooler.supabase.com:5432` con la variable local exportada. La
+migración de T1 se aplicó a `caja`, `caja_test` y `caja_e2e` pasando **las dos**
+variables inline. Queda pendiente decidir si el config debe preferir una
+`DATABASE_URL` local explícita; no se cambió acá porque es la misma pieza que usa el
+deploy para migrar producción (L19 de `caja-inventario.md`).
+
+**L7 — El cliente generado no se regenera solo.** `generated/prisma` está en
+`.gitignore` y `postinstall` lo genera, pero al cambiar el schema el archivo quedó
+viejo: el primer test falló con `Cannot read properties of undefined (reading
+'PRODUCTOS_READ')` porque `ScopeApi` todavía no existía. `npx prisma generate` lo
+resuelve; un checkout limpio ya lo hace vía `postinstall`.
