@@ -78,17 +78,30 @@ ejemplos `curl` de cada endpoint, ejecutables tal como están escritos.
   dos instancias lógicas sobre la misma tabla. Specs: S5.
 - **T4 — Endpoints de productos.** Listar/leer/crear/editar + ajuste de stock,
   delegando en los servicios existentes. Tests por endpoint, incluido el 403 de
-  escritura con token de lectura. Specs: S1, S2, S4, S11.
+  escritura con token de lectura. Specs: S1, S2, S4, S11. Hecho: servicio en
+  `src/server/productos.ts` compartido con la página del panel; paginación por
+  cursor; `ejecutarAutenticado` centraliza auth + cupo + errores. Commit: `35ad169`.
 - **T5 — Ventas y reportes.** `POST /ventas` con `Idempotency-Key`, GET de venta y
   los tres reportes. Tests: reenvío idéntico (200, sin segundo descuento), clave
   reusada con otros datos (409), stock insuficiente (409/422 con el disponible).
-  Specs: S1, S2, S6, S11.
+  Specs: S1, S2, S6, S11. Hecho: `registrarVenta` informa `reutilizada` para
+  separar 201 de 200; listado por `numero`; fechas validadas en el borde porque los
+  reportes las meten crudas en SQL. Commits: `3e39e59` (ventas), `8cdd6c6`
+  (reportes).
 - **T6 — OpenAPI y docs.** Schemas Zod compartidos, documento generado, endpoint y
-  página de documentación. Specs: S8.
+  página de documentación. Specs: S8. Hecho: OpenAPI 3.1 generado con
+  `z.toJSONSchema`, esquemas de salida anotados con el tipo del servicio, página
+  `/api-docs`, seis tests que cruzan documento y árbol de rutas. Commit: `c284b36`.
 - **T7 — README y `curl`s.** Emisión de token, ejemplos ejecutables, límites y
-  decisiones. Specs: S10.
+  decisiones. Specs: S10. Hecho (delegado a `gentle-ai-worker` por backstop de
+  contexto): sección «API pública (`/api/v1`)» con scopes, errores, rate limit,
+  punteros a `/api-docs` y OpenAPI, y bloques `curl` que se ejecutaron literalmente
+  extrayéndolos del README con `awk`, no reescribiéndolos a mano.
 - **T8 — Cierre de la etapa.** Suite completa, `tsc`, `eslint`, `build` y una corrida
-  real contra la app local con dos tokens distintos. Specs: S9.
+  real contra la app local con dos tokens distintos. Specs: S9. Hecho: 159 tests,
+  `tsc` y `eslint` limpios, `next build` OK (18 rutas), y corrida real contra el build
+  en `:3101` con un token de lectura y uno de escritura verificando 401, 403, 201,
+  el reenvío 200 con un solo descuento de stock y los tres reportes.
 
 ## Log
 
@@ -133,3 +146,38 @@ deploy para migrar producción (L19 de `caja-inventario.md`).
 viejo: el primer test falló con `Cannot read properties of undefined (reading
 'PRODUCTOS_READ')` porque `ScopeApi` todavía no existía. `npx prisma generate` lo
 resuelve; un checkout limpio ya lo hace vía `postinstall`.
+
+**L8 — Verificación por mutación en la venta por API.** El test de reenvío no es
+vacío: si se quita el `Idempotency-Key` obligatorio, el estado del stock tras dos
+POST idénticos cambia. Los tests de 403 comprueban el efecto (stock intacto, cero
+ventas), no sólo el status: un 403 con la venta ya escrita en otra transacción sería
+un falso verde.
+
+**L9 — `z.toJSONSchema` no representa `.transform()`.** El documento falló al
+generarse por el `transform` de `soloActivos` en el esquema de listado. Se resuelve
+con `io: 'input'` para parámetros y cuerpos (describe lo que viaja) y `io: 'output'`
+para respuestas, más `unrepresentable: 'any'` como red de seguridad por campo.
+
+**L10 — Backstop de contexto.** A 151k tokens, T7 y T8 se delegan a
+`gentle-ai-worker` con el documento como spec, en vez de seguir inline.
+
+**L11 — Dos defectos del cierre, encontrados por la verificación delegada.**
+(a) `POST /api/v1/ventas` con un `productoId` inventado devolvía **500 `interno`**:
+`ventas.ts` lanzaba `Error` genérico para producto inexistente e inactivo, así que el
+clamp de errores no podía distinguir un dato inválido del cliente de un defecto del
+servidor. Corregido con errores tipados en `src/server/erroresDominio.ts` —módulo
+propio para no crear un ciclo `ventas.ts` ↔ `productos.ts`, porque las clases de
+error son la peor pieza para tener en un ciclo—: 404 `no_encontrado` e inactivo 409
+`conflicto`. Tres tests nuevos; la suite pasó de 156 a 159.
+(b) El README afirmaba «66 tests de servicios» (número viejo, previo a esta etapa).
+Actualizado a 159.
+
+**L12 — Higiene de la verificación delegada.** El worker dejó dos tokens válidos en
+claro bajo `/tmp` y datos de prueba en la base local `caja`. Se revocaron los dos
+tokens, se borró el directorio temporal y se eliminaron los productos `MATE-*` con
+sus ventas, pagos, líneas y movimientos. Las bases quedaron sin residuos de prueba.
+
+**L13 — El 429 se verificó en vivo.** Se emitió un token, se le bajó
+`limitePorMinuto` a 2 por SQL y se hicieron tres pedidos: dos 200 y un 429 con
+`Retry-After`, que es la promesa del README. No quedó como afirmación de código sin
+corrida.
