@@ -43,3 +43,9 @@ next-env.d.ts
 
 # Prisma 7 genera el cliente en generated/; no se commitea.
 /generated/
+
+# Salidas de Playwright: trazas, capturas y reportes de cada corrida e2e.
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/

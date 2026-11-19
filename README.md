@@ -142,6 +142,47 @@ DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm
 Los tests truncan tablas antes de cada caso y **abortan si la base no termina en `_test`**:
 mejor negarse a correr que borrar datos de desarrollo por accidente.
 
+### E2E con navegador
+
+Los e2e manejan la aplicación compilada con Chromium, como la usaría una persona. A
+diferencia de los tests de servicios, **escriben datos**: crean ventas y descuentan stock.
+Por eso usan su propia base, `caja_e2e`, que se crea, se vacía, se migra y se siembra en cada
+corrida. Dos guardas impiden apuntarlos a otra parte: el host tiene que ser local y el nombre
+de la base tiene que terminar en `_e2e` — la misma idea que el `_test` de arriba.
+
+```bash
+npx playwright install --with-deps chromium   # una vez: navegador y librerías del sistema
+npm run test:e2e                              # prepara caja_e2e y corre los specs
+```
+
+La preparación no depende del comando: el `globalSetup` de `playwright.config.ts` la corre
+también cuando se invoca Playwright a mano, así que la segunda corrida arranca del mismo
+estado que la primera. Para eso hay que pasarle la base a mano, porque el config se niega a
+arrancar sin `DATABASE_URL` — así un `npx playwright test` suelto no usa el `.env` real:
+
+```bash
+DATABASE_URL=postgres://caja:caja@127.0.0.1:5433/caja_e2e \
+DIRECT_URL=postgres://caja:caja@127.0.0.1:5433/caja_e2e \
+npx playwright test
+```
+
+Cubren cuatro cosas: las rutas protegidas sin sesión terminan en `/login` sin filtrar el
+catálogo en el cuerpo, las credenciales inválidas muestran el error y no emiten cookie, el
+login válido deja una cookie `httpOnly` y abre el panel, y una venta completa por la UI
+descuenta el stock que muestra `/productos` y aparece en el reporte del día.
+
+### Integración continua
+
+`.github/workflows/ci.yml` corre en cada push a `main` y en cada pull request, con dos jobs
+independientes y un Postgres de servicio cada uno:
+
+| Job | Qué corre |
+| --- | --- |
+| `checks` | 66 tests de servicios, `eslint`, `next build` y `tsc --noEmit` |
+| `e2e` | Chromium y `npm run test:e2e` sobre el build de producción |
+
+Si el job de e2e falla, el pipeline guarda trazas y capturas por 7 días.
+
 ## Deploy
 
 Un proveedor de Postgres gestionado (Supabase, Neon) expone **dos** cadenas de conexión, y
@@ -211,7 +252,8 @@ plataforma.
 
 ## Estado
 
-Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 62
-tests. Verificado en producción: rutas protegidas sin fuga de datos (307 anónimo con cuerpo
-vacío), login con cookie firmada validada en el middleware, y una venta real de 2 unidades
-con su descuento de stock, su pago y el reporte del día cuadrando.
+Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 66
+tests de servicios y 4 pruebas de navegador. Verificado en producción: rutas protegidas sin
+fuga de datos (307 anónimo con cuerpo vacío), login con cookie firmada validada en el
+middleware, y una venta real de 2 unidades con su descuento de stock, su pago y el reporte
+del día cuadrando. GitHub Actions replica esa verificación en cada push.
