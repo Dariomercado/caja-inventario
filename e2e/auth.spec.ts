@@ -3,21 +3,29 @@ import { USUARIO_DEMO, NOMBRE_COOKIE_SESION, entrar } from './ayuda'
 
 const RUTAS_PROTEGIDAS = ['/productos', '/ventas/nueva', '/reportes']
 
-test('sin sesión, las rutas del panel mandan a /login sin filtrar datos', async ({ page }) => {
+test('sin sesión, las rutas del panel mandan a /login sin filtrar datos', async ({
+  page,
+  request,
+}) => {
   for (const ruta of RUTAS_PROTEGIDAS) {
-    const respuesta = await page.goto(ruta)
-
-    // El middleware redirige antes de renderizar. El 200 del final corresponde a
-    // /login: lo que importa es que la cadena incluyó un 307.
-    expect([200, 307]).toContain(respuesta?.status())
-    await expect(page).toHaveURL(/\/login$/)
+    // No seguir la redirección es a propósito: el cuerpo que tiene que estar limpio
+    // es el que devuelve el middleware, no la pantalla de /login a la que se llega
+    // después. Si se siguiera el salto, el HTML mirado sería siempre el del login y
+    // el test no diría nada sobre la redirección.
+    const respuesta = await request.get(ruta, { maxRedirects: 0 })
+    expect(respuesta.status()).toBe(307)
+    expect(respuesta.headers()['location']).toContain('/login')
 
     // El motivo por el que el guard vive en middleware y no en el layout: si el
     // HTML del panel llegara en el cuerpo de la redirección, la protección sería
     // cosmética. Un SKU del catálogo no puede aparecer en una pantalla anónima.
-    const cuerpo = await page.content()
+    const cuerpo = await respuesta.text()
     expect(cuerpo).not.toContain('AZU-001')
     expect(cuerpo).not.toContain('Azúcar 1kg')
+
+    // Y en el navegador, la ruta termina en el login.
+    await page.goto(ruta)
+    await expect(page).toHaveURL(/\/login$/)
   }
 })
 

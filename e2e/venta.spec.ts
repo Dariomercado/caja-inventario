@@ -51,12 +51,20 @@ test('una venta registrada por la UI descuenta stock y aparece en el reporte del
   // que muestra el catálogo bajó exactamente la cantidad vendida.
   expect(await stockEnProductos(page)).toBe(stockAntes - CANTIDAD)
 
-  // Y la venta entró al reporte. El rango por defecto son los últimos siete días y
-  // las filas van del día más viejo al más nuevo, así que la fila de hoy es la
-  // última: se afirma el monto en cualquier celda y el resumen del período, que es
-  // lo que un humano mira primero.
+  // Y la venta entró al reporte. Buscar el monto en cualquier celda no alcanza:
+  // puede estar en el total del período (o en el resumen de caja) sin que la venta
+  // esté imputada a un día. Por eso se exige una única fila de día con ese monto y
+  // se lee su columna de ventas, que es la que dice que ese día tiene movimientos.
   await page.goto('/reportes')
-  await expect(page.getByRole('cell', { name: totalMostrado })).toBeVisible()
+  const filaDelDia = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name: totalMostrado }) })
+  await expect(filaDelDia).toHaveCount(1)
+  // Columnas de la tabla: Día, Ventas, Total.
+  const ventasDelDia = Number((await filaDelDia.getByRole('cell').nth(1).innerText()).trim())
+  expect(ventasDelDia).toBeGreaterThanOrEqual(1)
+
+  // Y el resumen del período, que es lo que un humano mira primero, cuenta ventas.
   await expect(
     page.getByRole('paragraph').filter({ hasText: 'en el período' }),
   ).toContainText(/[1-9]\d* ventas/)

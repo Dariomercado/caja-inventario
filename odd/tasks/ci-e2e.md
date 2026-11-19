@@ -134,3 +134,17 @@ que sí recarga.
 Nada de esto toca el estado del trabajo: la verificación independiente corrió
 completa (S1 con un defecto real encontrado y corregido, S2, S3, S4 y S5 en
 verde), y la suite local está en 65 tests, `tsc`, `lint` y 4/4 e2e.
+
+L7 — Los tres avisos no bloqueantes del revisor se corrigieron igual, en un commit
+aparte (`7e1b012`), porque eran tests que aparentaban más de lo que probaban: la
+prueba de rutas anónimas miraba la pantalla de login en vez del cuerpo del
+redirect, la del reporte podía satisfacerse con el resumen del período, y el paso
+de artefactos subía un directorio que los reporters del CI nunca generan. Suite
+final: 65 tests, `tsc`, `lint` y 4/4 e2e en verde.
+
+Estado al cerrar esta sesión: rama `chore/ci-e2e` con seis commits, sin push. La
+review nativa del linaje `review-0c8521a5099ba46c` quedó abierta esperando una
+sesión nueva por la recarga de perfiles (L6). Ojo: su árbol congelado
+(`4c528934`, hasta `a0e1719`) **no incluye** los commits `782f302` y `7e1b012`;
+si se quiere que la review cubra el estado final, corresponde un START nuevo en
+lugar de reanudar ese linaje.
