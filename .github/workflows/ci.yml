@@ -1,0 +1,116 @@
+name: CI
+
+# Dos jobs con el mismo Postgres de servicio:
+#   - checks: la suite de servicios, eslint, tsc y el build.
+#   - e2e: Playwright sobre la aplicación compilada, por `npm run test:e2e`.
+# El de e2e repite el build dentro de su propio `webServer` (Playwright lo levanta),
+# así que no comparte artefactos: cada job es autónomo y puede fallar solo.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # El guard de `src/test/guard.ts` exige que la base de los tests termine en
+  # `_test`; cualquier otra cosa sería un test corriendo contra datos reales.
+  DATABASE_URL: postgres://caja:caja@127.0.0.1:5432/caja_test
+  # Los e2e usan su propia base, con otro sufijo, y `scripts/e2e.mjs` la crea y la
+  # vacía: el nombre es la guarda que impide apuntarlos a otra cosa.
+  DATABASE_URL_E2E: postgres://caja:caja@127.0.0.1:5432/caja_e2e
+  # Sólo para firmar cookies de sesión en el CI. No es un secreto real ni tiene que
+  # serlo: la base es efímera y muere con el runner.
+  SESSION_SECRET: ci-session-secret-que-solo-vive-en-el-runner
+
+jobs:
+  checks:
+    name: Tests, lint, tipos y build
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: caja
+          POSTGRES_PASSWORD: caja
+          POSTGRES_DB: caja_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U caja -d caja_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Aplicar migraciones
+        run: npx prisma migrate deploy
+
+      - name: Tests de servicios
+        run: npm test
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tipos
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: E2E con navegador
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: caja
+          POSTGRES_PASSWORD: caja
+          POSTGRES_DB: caja_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U caja -d caja_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # `--with-deps` instala las librerías de sistema que Chromium necesita en el
+      # runner. Sin eso el navegador baja pero no arranca.
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Correr los e2e
+        run: npm run test:e2e
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL_E2E }}
+
+      - name: Guardar trazas y capturas si falló
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
