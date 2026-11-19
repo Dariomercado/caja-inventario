@@ -17,17 +17,17 @@
 //
 // La regla 1 y la 2 viven en `e2e/base-e2e.mjs` porque `playwright.config.ts`
 // necesita exactamente las mismas: `npx playwright test` a mano también tiene que
-// ser seguro.
+// ser seguro. La preparación de la base vive en `e2e/preparar.mjs`, que además usa
+// el `globalSetup` de Playwright para que ese otro camino siembre igual.
 import { spawnSync } from 'node:child_process'
 import { createConnection } from 'node:net'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import pg from 'pg'
-import { validarBaseE2E, PUERTO_E2E } from '../e2e/base-e2e.mjs'
+import { validarBaseE2E, PUERTO_E2E, MARCA_PREPARADA, URL_POR_DEFECTO } from '../e2e/base-e2e.mjs'
+import { prepararBase } from '../e2e/preparar.mjs'
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const URL_POR_DEFECTO = 'postgres://caja:caja@127.0.0.1:5433/caja_e2e'
 
 function fallar(mensaje) {
   console.error(`\n[e2e] ${mensaje}\n`)
@@ -43,7 +43,7 @@ try {
   fallar(error.message)
 }
 
-const { url, nombreBase } = validada
+const { url } = validada
 const puertoBase = validada.puerto
 
 /** ¿Hay algo escuchando en `host:puerto`? Resuelve true/false. */
@@ -79,43 +79,21 @@ if (await hayAlguien('127.0.0.1', PUERTO_E2E)) {
   )
 }
 
-/** Crea la base si falta. `CREATE DATABASE` no corre dentro de una transacción. */
-async function asegurarLaBase() {
-  const mantenimiento = new URL(base)
-  mantenimiento.pathname = '/postgres'
+console.log(`[e2e] base de los e2e: ${base}`)
 
-  const cliente = new pg.Client({ connectionString: mantenimiento.toString() })
-  await cliente.connect()
-  try {
-    const { rowCount } = await cliente.query('SELECT 1 FROM pg_database WHERE datname = $1', [
-      nombreBase,
-    ])
-    if (rowCount === 0) {
-      await cliente.query(`CREATE DATABASE "${nombreBase}"`)
-      console.log(`[e2e] base "${nombreBase}" creada`)
-    }
-  } finally {
-    await cliente.end()
-  }
+try {
+  await prepararBase(base, RAIZ)
+} catch (error) {
+  fallar(error instanceof Error ? error.message : String(error))
 }
 
-/**
- * Vuelve la base a cero. Se borra el schema entero en lugar de truncar tablas una
- * por una: así también se va `_prisma_migrations` y las migraciones se aplican
- * desde el principio, que es el estado que queremos probar.
- */
-async function vaciarLaBase() {
-  const cliente = new pg.Client({ connectionString: base })
-  await cliente.connect()
-  try {
-    await cliente.query('DROP SCHEMA IF EXISTS public CASCADE')
-    await cliente.query('CREATE SCHEMA public')
-  } finally {
-    await cliente.end()
-  }
+const entorno = {
+  ...process.env,
+  DATABASE_URL: base,
+  DIRECT_URL: base,
+  // Ya está preparada: el `globalSetup` de Playwright no la vacía de nuevo.
+  [MARCA_PREPARADA]: '1',
 }
-
-const entorno = { ...process.env, DATABASE_URL: base, DIRECT_URL: base }
 
 function ejecutar(etiqueta, entrada, argumentos) {
   const archivo = resolve(RAIZ, entrada)
@@ -133,13 +111,6 @@ function ejecutar(etiqueta, entrada, argumentos) {
   }
 }
 
-console.log(`[e2e] base de los e2e: ${base}`)
-
-await asegurarLaBase()
-await vaciarLaBase()
-
-ejecutar('aplicando migraciones', 'node_modules/prisma/build/index.js', ['migrate', 'deploy'])
-ejecutar('sembrando datos de demo', 'node_modules/prisma/build/index.js', ['db', 'seed'])
 ejecutar('corriendo Playwright', 'node_modules/@playwright/test/cli.js', [
   'test',
   ...process.argv.slice(2),

@@ -134,6 +134,9 @@ export function FormularioVenta({ productos }: { productos: Producto[] }) {
               <select
                 value={linea.productoId}
                 onChange={(e) => cambiarProducto(indice, e.target.value)}
+                // El nombre accesible es lo que usa el e2e para elegir el producto: sin
+                // él, la única forma de ubicar este select era su orden en el documento.
+                aria-label="Producto"
                 className="min-w-48 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
               >
                 {productos.map((opcion) => (
@@ -200,7 +203,9 @@ export function FormularioVenta({ productos }: { productos: Producto[] }) {
 
         <div className="text-right">
           <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
-          <p className="text-2xl font-semibold tabular-nums">
+          {/* El e2e compara este monto con el que confirma el servidor; el test id es
+              el anclaje estable, la clase de Tailwind sólo lo estiliza. */}
+          <p data-testid="total-venta" className="text-2xl font-semibold tabular-nums">
             {formatearCentavos(totalEstimado)}
           </p>
         </div>

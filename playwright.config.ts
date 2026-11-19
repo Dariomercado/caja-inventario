@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
-import { validarBaseE2E, PUERTO_E2E } from './e2e/base-e2e.mjs'
+import { PUERTO_E2E, validarBaseConMensaje } from './e2e/base-e2e.mjs'
 
 // Los e2e manejan la aplicación compilada, igual que en producción: `next start`
 // sobre un `next build`. Correrlos contra `next dev` daría un ciclo de vida
@@ -10,8 +10,10 @@ const BASE_URL = `http://127.0.0.1:${PUERTO}`
 
 // Guard de seguridad antes que nada: este archivo se evalúa también cuando alguien
 // invoca `playwright test` a mano, sin pasar por `npm run test:e2e`. La regla vive
-// en `e2e/base-e2e.mjs` para que no haya dos versiones de la misma guarda.
-validarBaseE2E(process.env['DATABASE_URL'] ?? '')
+// en `e2e/base-e2e.mjs` para que no haya dos versiones de la misma guarda, y el
+// rechazo sale con el mismo `[e2e]` que imprime el script: las dos puertas explican
+// lo mismo, ninguna tira una traza cruda.
+validarBaseConMensaje(process.env['DATABASE_URL'] ?? '')
 
 export default defineConfig({
   testDir: './e2e',
@@ -29,6 +31,10 @@ export default defineConfig({
     video: 'off',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // Vacía, migra y siembra la base también cuando alguien corre `npx playwright test`
+  // sin pasar por `npm run test:e2e`: la suite escribe datos, así que la segunda
+  // corrida tiene que arrancar del mismo estado que la primera.
+  globalSetup: './e2e/global-setup.mjs',
   webServer: {
     // El build tarda; el timeout cubre compilar y arrancar en un runner frío.
     command: `npm run build && npx next start -p ${PUERTO}`,

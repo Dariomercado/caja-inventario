@@ -55,6 +55,12 @@ hay que leer para creer que los tests prueban algo) y `2bb4a7b` es el pipeline y
 su documentación. Se pueden revisar o publicar por separado; ninguno depende del
 contenido del otro más allá del script `test:e2e` que ya existe en el primero.
 
+Después de las correcciones de review la rama quedó en 7 commits y 1.043 líneas
+propias, así que ese corte ya no la describe. Para publicar conviene el mismo par:
+arranque (`d64fefc`) y pipeline (`2bb4a7b`) como base, y los tres commits de
+corrección —`782f302` build antes de tipos, `7e3c8b1` y `88ec759` arnés— sobre el
+slice al que pertenecen, no como slice aparte.
+
 ## Log
 
 L1 — «bueno continuamos, ya nos queda poco con este proyecto podria decir que
@@ -148,3 +154,61 @@ sesión nueva por la recarga de perfiles (L6). Ojo: su árbol congelado
 (`4c528934`, hasta `a0e1719`) **no incluye** los commits `782f302` y `7e1b012`;
 si se quiere que la review cubra el estado final, corresponde un START nuevo en
 lugar de reanudar ese linaje.
+
+L8 — Review retomada en sesión nueva y **cerrada aprobada**. No se reanudó
+`review-0c8521a5099ba46c`: su árbol congelado no incluía `782f302` (build antes
+de tipos) ni `a7135af`, así que habría aprobado un árbol sin el arreglo. Se hizo
+un START nuevo, `review-4d9552c3e39e83ed`, sobre el rango commiteado `main..HEAD`
+(base `b8ff138f`, 13 archivos, 792 líneas, tier alto por el shell de
+`.github/workflows/ci.yml`).
+
+La recarga de perfiles de L6 quedó confirmada: en sesión nueva `review-reliability`
+corrió con `nan/glm5.3-flash`, `stopReason: stop`, 19.099 tokens y 72 s. El
+bloqueo era del perfil congelado en la sesión vieja, no del linaje ni del código.
+Autoridad quemada, sin correcciones abiertas. Cinco hallazgos no bloqueantes
+quedaron como trabajo posterior: R2-001 (el spec de venta se ata al orden del DOM
+y a una clase de Tailwind), R3-config-throw-vs-fallar (el guard tira un `Error`
+crudo cuando lo evalúa el config, sin el mensaje `[e2e]` del script),
+R3-manual-e2e-no-reset (correr `npx playwright test` directo no resiembra, así
+que corridas manuales repetidas agotan el stock sembrado), R3-postgres-maint-db
+(`asegurarLaBase` usa la base `postgres` sin `try/catch` propio) y
+R3-report-row-by-amount (la fila del reporte se identifica sólo por el monto).
+
+Estado al cerrar: rama `chore/ci-e2e` con seis commits, árbol limpio salvo este
+registro, sin push. Delivery sigue siendo decisión del humano.
+
+L9 — Los cinco avisos del L8 se corrigieron igual, porque eran tests (y un runner)
+que aparentaban más de lo que probaban.
+
+R2-001: el spec de venta elegía el producto por orden en el documento y el total por
+la clase `p.text-2xl`. Ahora el select tiene `aria-label="Producto"` y el total
+`data-testid="total-venta"`: el test se ancla en lo que un humano o un lector de
+pantalla usa, no en el maquetado.
+
+R3-report-row-by-amount: la fila del reporte se ubica por la fecha de hoy (mismo
+`Intl` con `America/Argentina/Buenos_Aires` que usa la página) y recién dentro de esa
+fila se compara el monto exacto. Antes, otra venta del mismo importe en otro día
+rompía el `toHaveCount(1)`.
+
+R3-manual-e2e-no-reset: la preparación de la base salió de `scripts/e2e.mjs` a
+`e2e/preparar.mjs` y ahora también la corre el `globalSetup` de Playwright, así que
+`npx playwright test` siembra igual que `npm run test:e2e`. El script deja
+`E2E_BASE_PREPARADA=1` para que no se repita el trabajo en la misma corrida.
+
+R3-config-throw-vs-fallar y R3-postgres-maint-db: el config presenta el rechazo con
+el mismo `[e2e]` que el script (lo fija `src/test/e2e-config.test.ts`, rojo primero), y
+la base de mantenimiento `postgres` ahora falla con un mensaje en lugar de una
+traza del driver.
+
+Dos obstáculos del camino, ambos de Playwright y ninguno del código: compila a
+CommonJS todo lo que cuelga del config, así que (a) `import.meta` no sobrevive y (b)
+un `.mjs` propio importado desde ahí se evalúa con el formato equivocado
+(`exports is not defined in ES module scope`, o un export que no aparece). Por eso
+`e2e/global-setup.mjs` usa sólo builtins y delega en `e2e/preparar-base.mjs`, que
+corre como ESM real en un proceso hijo. La raíz del repo se recibe como parámetro en
+lugar de `import.meta`.
+
+Verificación: 66 tests (el nuevo incluido), `eslint` y `tsc --noEmit` en verde; e2e
+4/4 dos veces seguidas —una por `npm run test:e2e` y otra por `npx playwright test`
+directo sobre la base que dejó la primera—. Eso último es la prueba de S4 por los dos
+caminos, no sólo por el que documenta el README.
