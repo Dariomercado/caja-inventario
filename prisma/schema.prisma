@@ -13,6 +13,10 @@
 //
 // 3. `LineaVenta.precioUnitarioCentavos` congela el precio del momento. Si el
 //    producto cambia de precio mañana, las ventas de ayer no se mueven.
+//
+// 4. La API pública no comparte credencial con la UI: `TokenApi` guarda sólo el
+//    SHA-256 del token. El valor en claro existe una vez, al emitirlo, y no es
+//    recuperable. `prefijo` permite nombrar el token en un log sin poder usarlo.
 
 generator client {
   // Prisma 7: generador nuevo con salida explícita. El cliente se importa desde
@@ -39,6 +43,14 @@ enum MedioPago {
   TARJETA
 }
 
+enum ScopeApi {
+  PRODUCTOS_READ
+  PRODUCTOS_WRITE
+  VENTAS_READ
+  VENTAS_WRITE
+  REPORTES_READ
+}
+
 model Usuario {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -50,6 +62,53 @@ model Usuario {
   updatedAt    DateTime @updatedAt
 
   ventas Venta[]
+  tokens TokenApi[]
+}
+
+// Credencial de la API pública. Independiente de la cookie de sesión del panel:
+// un token filtrado no da acceso a la UI, y cerrar sesión en la UI no lo revoca.
+model TokenApi {
+  id String @id @default(cuid())
+  // Etiqueta humana para saber cuál es cuál: "asistente-evals", "postman".
+  nombre String
+  // SHA-256 del token en claro, en hexadecimal. El token en claro no se guarda.
+  hash    String @unique
+  // Primeros caracteres, para poder identificarlo en un log o en un listado
+  // sin revelar nada reutilizable.
+  prefijo String
+  // Scopes como enum de Postgres y no un string: un valor inválido no entra a la
+  // base, y agregar un scope es una migración, no un typo silencioso.
+  scopes ScopeApi[]
+  // Nullable = sin vencimiento. La emisión por defecto pone uno.
+  expiraEn    DateTime?
+  revocadoEn  DateTime?
+  ultimoUsoEn DateTime?
+  // Cupo por ventana de un minuto, copiado al token para poder ajustarlo por
+  // credencial sin redeploy.
+  limitePorMinuto Int      @default(60)
+  createdAt       DateTime @default(now())
+
+  usuarioId String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  usos UsoTokenApi[]
+
+  @@index([usuarioId])
+}
+
+// Contador de rate limit. La fila compuesta ES el contador de la ventana, así que
+// el incremento es un único INSERT ... ON CONFLICT DO UPDATE ... RETURNING: dos
+// instancias del servidor no pueden contar de menos. En memoria no serviría, porque
+// el deploy corre en varias instancias y cada una tendría su propio contador.
+model UsoTokenApi {
+  tokenId String
+  token   TokenApi @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  // Inicio de la ventana de un minuto, truncado a segundos.
+  ventana DateTime
+  usos    Int      @default(0)
+
+  @@id([tokenId, ventana])
+  @@index([ventana])
 }
 
 model Producto {
