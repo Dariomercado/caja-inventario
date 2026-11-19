@@ -161,6 +161,44 @@ describe('POST /api/v1/ventas', () => {
     expect((await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } })).stock).toBe(5)
   })
 
+  it('responde 404 cuando el producto del carrito no existe, no 500', async () => {
+    const token = await tokenCon([ScopeApi.VENTAS_WRITE])
+
+    const respuesta = await POST(
+      pedido('/api/v1/ventas', {
+        token,
+        method: 'POST',
+        clave: 'producto-fantasma',
+        body: { items: [{ productoId: 'no-existe', cantidad: 1 }], medioPago: 'EFECTIVO' },
+      }),
+    )
+
+    // Un id que el cliente inventó es un dato inválido, no un defecto del servidor:
+    // devolver 500 haría que el consumidor reintentara algo que nunca va a funcionar.
+    expect(respuesta.status).toBe(404)
+    await expect(respuesta.json()).resolves.toMatchObject({ error: { code: 'no_encontrado' } })
+    expect(await prisma.venta.count()).toBe(0)
+  })
+
+  it('responde 409 cuando el producto está inactivo', async () => {
+    const token = await tokenCon([ScopeApi.VENTAS_WRITE])
+    const producto = await productoConStock(5)
+    await prisma.producto.update({ where: { id: producto.id }, data: { activo: false } })
+
+    const respuesta = await POST(
+      pedido('/api/v1/ventas', {
+        token,
+        method: 'POST',
+        clave: 'producto-inactivo',
+        body: { items: [{ productoId: producto.id, cantidad: 1 }], medioPago: 'EFECTIVO' },
+      }),
+    )
+
+    expect(respuesta.status).toBe(409)
+    await expect(respuesta.json()).resolves.toMatchObject({ error: { code: 'conflicto' } })
+    expect(await prisma.venta.count()).toBe(0)
+  })
+
   it('responde 400 si se mandan pagos y medioPago a la vez', async () => {
     const token = await tokenCon([ScopeApi.VENTAS_WRITE])
     const producto = await productoConStock(5)

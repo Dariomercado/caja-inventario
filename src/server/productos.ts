@@ -1,5 +1,13 @@
 import { prisma } from '@/lib/db'
+import {
+  ProductoInactivoError,
+  ProductoNoEncontradoError,
+  SkuDuplicadoError,
+} from './erroresDominio'
 import { StockInsuficienteError } from './ventas'
+
+// Se reexportan desde acá porque éste es el módulo que los consumidores ya importan.
+export { ProductoInactivoError, ProductoNoEncontradoError, SkuDuplicadoError }
 
 /**
  * Productos y su stock.
@@ -8,20 +16,6 @@ import { StockInsuficienteError } from './ventas'
  * cada consumidor. El precio se maneja siempre en centavos enteros, igual que en el
  * resto del sistema: no hay un lugar donde un float se cuele.
  */
-
-export class ProductoNoEncontradoError extends Error {
-  constructor(readonly productoId: string) {
-    super(`El producto ${productoId} no existe`)
-    this.name = 'ProductoNoEncontradoError'
-  }
-}
-
-export class SkuDuplicadoError extends Error {
-  constructor(readonly sku: string) {
-    super(`Ya existe un producto con el SKU ${sku}`)
-    this.name = 'SkuDuplicadoError'
-  }
-}
 
 export type ProductoResumen = {
   id: string
@@ -179,7 +173,7 @@ export async function ajustarStock(entrada: {
     const producto = filas[0]
     if (!producto) throw new ProductoNoEncontradoError(entrada.productoId)
     if (!producto.activo) {
-      throw new Error(`El producto ${producto.nombre} está inactivo`)
+      throw new ProductoInactivoError(producto.nombre)
     }
 
     const stockLuego =

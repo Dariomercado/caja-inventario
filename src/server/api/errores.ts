@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
-import { ProductoNoEncontradoError, SkuDuplicadoError } from '@/server/productos'
+import {
+  ProductoInactivoError,
+  ProductoNoEncontradoError,
+  SkuDuplicadoError,
+} from '@/server/productos'
 import {
   ClaveIdempotenciaReutilizadaError,
   PagoInconsistenteError,
@@ -66,6 +70,12 @@ export function respuestaDeErrorDeDominio(error: unknown): NextResponse {
   }
 
   if (error instanceof SkuDuplicadoError) {
+    return errorJson('conflicto', error.message)
+  }
+
+  // Un producto inactivo es un conflicto de estado, no un error del servidor: el
+  // consumidor mandó un id real sobre el que ya no se puede operar.
+  if (error instanceof ProductoInactivoError) {
     return errorJson('conflicto', error.message)
   }
 

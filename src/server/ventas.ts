@@ -1,4 +1,5 @@
 import { prisma } from '../lib/db'
+import { ProductoInactivoError, ProductoNoEncontradoError } from './erroresDominio'
 
 export class StockInsuficienteError extends Error {
   constructor(
@@ -180,10 +181,12 @@ async function ventaEnTransaccion(input: RegistrarVentaInput): Promise<VentaRegi
       `
       const producto = filas[0]
       if (!producto) {
-        throw new Error(`El producto ${id} no existe`)
+        // Errores tipados y no `Error` genérico: la capa HTTP necesita distinguir
+        // un dato inválido del cliente (404/409) de un defecto del servidor (500).
+        throw new ProductoNoEncontradoError(id)
       }
       if (!producto.activo) {
-        throw new Error(`El producto ${producto.nombre} está inactivo`)
+        throw new ProductoInactivoError(producto.nombre)
       }
       bloqueados.set(id, producto)
     }

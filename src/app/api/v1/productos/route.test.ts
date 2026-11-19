@@ -230,6 +230,28 @@ describe('POST /api/v1/productos/:id/ajustes', () => {
     })
   })
 
+  it('responde 409 con un producto inactivo', async () => {
+    const token = await tokenCon([ScopeApi.PRODUCTOS_WRITE])
+    const producto = await prisma.producto.create({
+      data: { sku: 'AZU-006', nombre: 'Azúcar', precioCentavos: 100, stock: 2, activo: false },
+    })
+
+    const respuesta = await ajustar(
+      pedido(`/api/v1/productos/${producto.id}/ajustes`, {
+        token,
+        method: 'POST',
+        body: { tipo: 'ENTRADA', cantidad: 5 },
+      }),
+      { params: Promise.resolve({ id: producto.id }) },
+    )
+
+    // Un producto real sobre el que ya no se puede operar es un conflicto, no un 500.
+    expect(respuesta.status).toBe(409)
+
+    const fila = await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } })
+    expect(fila.stock).toBe(2)
+  })
+
   it('responde 403 con token de lectura sin tocar el stock', async () => {
     const token = await tokenCon([ScopeApi.PRODUCTOS_READ])
     const producto = await prisma.producto.create({
