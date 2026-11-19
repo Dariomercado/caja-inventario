@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import type { ProductoResumen } from '@/server/productos'
+import type { CajaDelDia, ResumenDia, TopProducto } from '@/server/reportes'
+import type { VentaDetalle, VentaResumen } from '@/server/ventasConsulta'
 
 /**
  * Contratos de entrada de la API, en un solo lugar.
@@ -130,6 +133,109 @@ export const esquemaTopProductosQuery = z
   })
 
 export const esquemaCajaQuery = z.object({ fecha: fechaISO })
+
+/**
+ * Esquemas de salida.
+ *
+ * Están anotados con el tipo que devuelve el servicio, así que si un día el
+ * servicio agrega, quita o cambia un campo y el esquema no lo sigue, TypeScript
+ * falla al compilar en lugar de que el documento OpenAPI mienta en silencio. Es el
+ * único control barato que evita que una respuesta y su documentación diverjan.
+ */
+export const esquemaError: z.ZodType<{ error: { code: string; message: string } }> = z.object({
+  error: z.object({
+    code: z.string().describe('Código estable. Es lo que un cliente debe ramificar.'),
+    message: z.string().describe('Texto para humanos. Puede cambiar entre versiones.'),
+  }),
+})
+
+export const esquemaProducto: z.ZodType<ProductoResumen> = z.object({
+  id: z.string(),
+  sku: z.string(),
+  nombre: z.string(),
+  precioCentavos: z.number().int(),
+  stock: z.number().int(),
+  activo: z.boolean(),
+})
+
+export const esquemaPaginaProductos: z.ZodType<{
+  productos: ProductoResumen[]
+  siguienteCursor: string | null
+}> = z.object({
+  productos: z.array(esquemaProducto),
+  siguienteCursor: z
+    .string()
+    .nullable()
+    .describe('Cursor de la página siguiente, o null si no hay más.'),
+})
+
+export const esquemaAjusteStockRespuesta: z.ZodType<{
+  productoId: string
+  stockAnterior: number
+  stock: number
+}> = z.object({
+  productoId: z.string(),
+  stockAnterior: z.number().int(),
+  stock: z.number().int(),
+})
+
+export const esquemaVentaResumen: z.ZodType<VentaResumen> = z.object({
+  id: z.string(),
+  numero: z.number().int(),
+  totalCentavos: z.number().int(),
+  creadaEn: z.string().describe('ISO 8601 en UTC.'),
+})
+
+export const esquemaPaginaVentas: z.ZodType<{
+  ventas: VentaResumen[]
+  siguienteCursor: number | null
+}> = z.object({
+  ventas: z.array(esquemaVentaResumen),
+  siguienteCursor: z.number().int().nullable(),
+})
+
+export const esquemaVentaDetalle: z.ZodType<VentaDetalle> = z.object({
+  id: z.string(),
+  numero: z.number().int(),
+  totalCentavos: z.number().int(),
+  creadaEn: z.string(),
+  lineas: z.array(
+    z.object({
+      productoId: z.string(),
+      nombre: z.string(),
+      cantidad: z.number().int(),
+      precioUnitarioCentavos: z.number().int(),
+      subtotalCentavos: z.number().int(),
+    }),
+  ),
+  pagos: z.array(z.object({ medio: z.string(), montoCentavos: z.number().int() })),
+})
+
+export const esquemaResumenDia: z.ZodType<ResumenDia> = z.object({
+  fecha: z.string(),
+  cantidadVentas: z.number().int(),
+  totalCentavos: z.number().int(),
+})
+
+export const esquemaTopProducto: z.ZodType<TopProducto> = z.object({
+  productoId: z.string(),
+  nombre: z.string(),
+  cantidadVendida: z.number().int(),
+  totalCentavos: z.number().int(),
+})
+
+export const esquemaCajaDelDia: z.ZodType<CajaDelDia> = z.object({
+  fecha: z.string(),
+  medios: z.array(
+    z.object({
+      medio: z.enum(['EFECTIVO', 'TRANSFERENCIA', 'TARJETA']),
+      cantidadPagos: z.number().int(),
+      totalCentavos: z.number().int(),
+    }),
+  ),
+  cantidadPagos: z.number().int(),
+  granTotalCentavos: z.number().int(),
+})
 
 export type EntradaNuevoProducto = z.infer<typeof esquemaNuevoProducto>
 export type EntradaEditarProducto = z.infer<typeof esquemaEditarProducto>
