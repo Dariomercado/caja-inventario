@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { ProductoNoEncontradoError, SkuDuplicadoError } from '@/server/productos'
 import {
   ClaveIdempotenciaReutilizadaError,
   PagoInconsistenteError,
@@ -20,6 +21,7 @@ export type CodigoError =
   | 'scope_insuficiente'
   | 'cuerpo_invalido'
   | 'no_encontrado'
+  | 'conflicto'
   | 'stock_insuficiente'
   | 'pago_inconsistente'
   | 'clave_reutilizada'
@@ -31,6 +33,7 @@ const STATUS: Record<CodigoError, number> = {
   scope_insuficiente: 403,
   cuerpo_invalido: 400,
   no_encontrado: 404,
+  conflicto: 409,
   stock_insuficiente: 409,
   pago_inconsistente: 409,
   clave_reutilizada: 409,
@@ -58,6 +61,14 @@ export function errorJson(
  * token ya puede ver por `GET /productos`: no revela nada nuevo y evita un viaje.
  */
 export function respuestaDeErrorDeDominio(error: unknown): NextResponse {
+  if (error instanceof ProductoNoEncontradoError) {
+    return errorJson('no_encontrado', error.message)
+  }
+
+  if (error instanceof SkuDuplicadoError) {
+    return errorJson('conflicto', error.message)
+  }
+
   if (error instanceof StockInsuficienteError) {
     return errorJson(
       'stock_insuficiente',
