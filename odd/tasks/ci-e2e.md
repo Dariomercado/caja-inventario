@@ -212,3 +212,35 @@ Verificación: 66 tests (el nuevo incluido), `eslint` y `tsc --noEmit` en verde;
 4/4 dos veces seguidas —una por `npm run test:e2e` y otra por `npx playwright test`
 directo sobre la base que dejó la primera—. Eso último es la prueba de S4 por los dos
 caminos, no sólo por el que documenta el README.
+
+L10 — Merge y publicación. `chore/ci-e2e` entró a `main` como merge commit `89565f9`
+(«merge: pipeline de CI y e2e con navegador», con `--no-ff` como los merges
+anteriores del repo).
+
+El push no pasó directo: el preflight de RDD lo frenó porque `assess` del rango
+entregado (`a8e00a3..89565f9`, 18 archivos, 1.095 líneas) devolvió `reviewDue: true`
+con `nativeRisk: high` por el shell de `ci.yml`, y ese candidato no estaba consumido
+—la review anterior cubría el árbol sin `dfa3d01`—. Se abrió el linaje
+`review-644f48d9820a0339` con tres lentes (risk, resilience, reliability); las tres
+corrieron con `nan/glm5.3-flash` entre 23.098 y 24.113 tokens (26–51 s cada una) y el
+linaje cerró **aprobado**, authority quemada, sin correcciones. Push
+`a8e00a3..89565f9` a `origin/main`.
+
+Primera corrida real del pipeline: run `44475384139`, **verde en los dos jobs** —
+`checks` (66 tests, eslint, build y tsc) y `e2e` (Chromium más 4/4 en 16,1 s sobre el
+Postgres de servicio). Es la primera vez que S1 se verifica fuera de la máquina del
+autor, que era el punto de la feature.
+
+Siete avisos no bloqueantes de esta segunda review, ninguno sobre el código de la
+aplicación: R1-1 (credenciales demo en `e2e/ayuda.ts`), R3-config-guard-duplication-ok
+(el camino de `DATABASE_URL` vacío del config no está asertado),
+R3-locale-date-boundary (una corrida que cruce la medianoche argentina puede calcular
+un «hoy» distinto al de la página), R3-unused-ventas-count, R4-e2e-exit-silent (si
+falla el `spawn` del CLI de Playwright no hay diagnóstico `[e2e]`), R4-globalsetup-error-detail
+(no se mira `resultado.error` del hijo) y R4-vaciar-unbounded (`vaciarLaBase` no tiene
+timeout de conexión).
+
+Ojo con R3-unused-ventas-count: el aviso dice que el conteo de ventas del día se lee y
+no se afirma, pero `e2e/venta.spec.ts:71` sí lo afirma
+(`expect(ventasDelDia).toBeGreaterThanOrEqual(1)`). El revisor leyó mal ese caso; no
+se cambió nada por él.
