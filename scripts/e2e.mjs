@@ -6,24 +6,28 @@
 // dedicada —`caja_e2e`— la crea si no existe, la deja vacía, aplica migraciones y
 // siembra antes de levantar el navegador.
 //
-// Las dos guardas, en este orden, y ninguna es opcional:
+// Tres guardas, en este orden, y ninguna es opcional:
 //   1. El host tiene que ser esta máquina. El `.env` de este repo apunta a Supabase
 //      de producción; sin este chequeo la suite vendería azúcar real.
 //   2. El nombre de la base tiene que terminar en `_e2e`, igual que los tests de
-//      servicios exigen `_test` (ver `src/test/guard.ts`). Vaciar el schema es
-//      destructivo y la única defensa razonable es que el nombre grite que es
-//      descartable.
+//      servicios exigen `_test` (ver `src/test/guard.ts`).
+//   3. El puerto de la app tiene que estar libre. Playwright no reutiliza
+//      servidores, así que un puerto ocupado lo haría fallar; avisarlo acá convierte
+//      un error de bind en una explicación.
+//
+// La regla 1 y la 2 viven en `e2e/base-e2e.mjs` porque `playwright.config.ts`
+// necesita exactamente las mismas: `npx playwright test` a mano también tiene que
+// ser seguro.
 import { spawnSync } from 'node:child_process'
 import { createConnection } from 'node:net'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import pg from 'pg'
+import { validarBaseE2E, PUERTO_E2E } from '../e2e/base-e2e.mjs'
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const URL_POR_DEFECTO = 'postgres://caja:caja@127.0.0.1:5433/caja_e2e'
-const HOSTS_LOCALES = ['127.0.0.1', 'localhost', '::1']
-const SUFIJO = '_e2e'
 
 function fallar(mensaje) {
   console.error(`\n[e2e] ${mensaje}\n`)
@@ -32,50 +36,47 @@ function fallar(mensaje) {
 
 const base = process.env['DATABASE_URL'] ?? URL_POR_DEFECTO
 
-let url
+let validada
 try {
-  url = new URL(base)
-} catch {
-  fallar(`DATABASE_URL no es una URL válida: ${base}`)
+  validada = validarBaseE2E(base)
+} catch (error) {
+  fallar(error.message)
 }
 
-if (!HOSTS_LOCALES.includes(url.hostname)) {
-  fallar(
-    `DATABASE_URL apunta a "${url.hostname}", que no es esta máquina.\n` +
-      '      Los e2e crean ventas y descuentan stock: sólo pueden correr contra una base local.',
-  )
-}
+const { url, nombreBase } = validada
+const puertoBase = validada.puerto
 
-const nombreBase = url.pathname.replace(/^\//, '')
-if (!nombreBase.endsWith(SUFIJO) || !/^[a-z0-9_]+$/i.test(nombreBase)) {
-  fallar(
-    `la base "${nombreBase}" no termina en "${SUFIJO}".\n` +
-      '      Los e2e vacían el schema antes de correr, así que el nombre tiene que\n' +
-      `      identificar una base descartable. Por defecto usan ${URL_POR_DEFECTO}`,
-  )
-}
-
-const puerto = Number(url.port || 5432)
-
-async function esperarElPuerto() {
-  await new Promise((listo, falla) => {
-    const socket = createConnection({ host: url.hostname, port: puerto })
-    socket.setTimeout(2000)
+/** ¿Hay algo escuchando en `host:puerto`? Resuelve true/false. */
+function hayAlguien(host, puerto) {
+  return new Promise((listo) => {
+    const socket = createConnection({ host, port: puerto })
+    socket.setTimeout(1500)
     socket.on('connect', () => {
       socket.destroy()
-      listo()
+      listo(true)
     })
     socket.on('timeout', () => {
       socket.destroy()
-      falla(new Error('timeout'))
+      listo(false)
     })
-    socket.on('error', falla)
-  }).catch(() => {
-    fallar(
-      `no hay base escuchando en ${url.hostname}:${puerto}.\n` +
-        '      Levantala con `npm run db:up` (Docker Compose) y volvé a intentar.',
-    )
+    socket.on('error', () => listo(false))
   })
+}
+
+if (!(await hayAlguien(url.hostname.replace(/^\[|\]$/g, ''), puertoBase))) {
+  fallar(
+    `no hay base escuchando en ${url.hostname}:${puertoBase}.\n` +
+      '      Levantala con `npm run db:up` (Docker Compose) y volvé a intentar.',
+  )
+}
+
+if (await hayAlguien('127.0.0.1', PUERTO_E2E)) {
+  fallar(
+    `el puerto ${PUERTO_E2E} ya está ocupado.\n` +
+      '      Los e2e levantan su propio servidor con la base de pruebas y no se enganchan\n' +
+      '      a uno ajeno: si ese servidor apunta a producción, el test de venta crearía una\n' +
+      '      venta real. Pará lo que esté escuchando ahí (un `npm run dev`, por ejemplo).',
+  )
 }
 
 /** Crea la base si falta. `CREATE DATABASE` no corre dentro de una transacción. */
@@ -134,7 +135,6 @@ function ejecutar(etiqueta, entrada, argumentos) {
 
 console.log(`[e2e] base de los e2e: ${base}`)
 
-await esperarElPuerto()
 await asegurarLaBase()
 await vaciarLaBase()
 

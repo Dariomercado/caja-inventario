@@ -1,36 +1,17 @@
 import { defineConfig, devices } from '@playwright/test'
+import { validarBaseE2E, PUERTO_E2E } from './e2e/base-e2e.mjs'
 
 // Los e2e manejan la aplicación compilada, igual que en producción: `next start`
 // sobre un `next build`. Correrlos contra `next dev` daría un ciclo de vida
 // distinto (recarga en caliente, compilación por ruta) y taparía fallos que sólo
 // aparecen en el build.
-const PUERTO = 3100
+const PUERTO = PUERTO_E2E
 const BASE_URL = `http://127.0.0.1:${PUERTO}`
 
-// Guard de seguridad antes que nada: este archivo se evalúa también cuando
-// alguien invoca `playwright test` a mano, sin pasar por `npm run test:e2e`. Los
-// e2e crean ventas y descuentan stock, así que sólo pueden apuntar a una base local
-// cuyo nombre termine en `_e2e`. El `.env` de este repo apunta a Supabase de
-// producción: el chequeo no es teórico.
-const urlBase = process.env['DATABASE_URL'] ?? ''
-const { hostBase, nombreBase } = (() => {
-  try {
-    const url = new URL(urlBase)
-    return { hostBase: url.hostname, nombreBase: url.pathname.replace(/^\//, '') }
-  } catch {
-    return { hostBase: '', nombreBase: '' }
-  }
-})()
-
-const HOSTS_LOCALES = ['127.0.0.1', 'localhost', '::1']
-
-if (!HOSTS_LOCALES.includes(hostBase) || !nombreBase.endsWith('_e2e')) {
-  throw new Error(
-    `Los e2e necesitan una base local terminada en _e2e y DATABASE_URL apunta a ` +
-      `"${hostBase || '(sin definir)'}/${nombreBase || '?'}".\n` +
-      'Usá `npm run test:e2e`, que prepara esa base antes de arrancar.',
-  )
-}
+// Guard de seguridad antes que nada: este archivo se evalúa también cuando alguien
+// invoca `playwright test` a mano, sin pasar por `npm run test:e2e`. La regla vive
+// en `e2e/base-e2e.mjs` para que no haya dos versiones de la misma guarda.
+validarBaseE2E(process.env['DATABASE_URL'] ?? '')
 
 export default defineConfig({
   testDir: './e2e',
@@ -52,7 +33,12 @@ export default defineConfig({
     // El build tarda; el timeout cubre compilar y arrancar en un runner frío.
     command: `npm run build && npx next start -p ${PUERTO}`,
     url: `${BASE_URL}/login`,
-    reuseExistingServer: !process.env['CI'],
+    // Nunca reutilizar un servidor ya levantado: el guard de arriba valida la base
+    // de ESTE proceso, no la que usa un servidor ajeno escuchando en el puerto. Un
+    // `npm run dev` olvidado apuntando a producción convertiría el test de venta en
+    // una venta real. Si el puerto está ocupado, el runner falla antes de arrancar
+    // (ver `scripts/e2e.mjs`) y Playwright no se engancha a nada.
+    reuseExistingServer: false,
     timeout: 300_000,
     stdout: 'pipe',
     stderr: 'pipe',
