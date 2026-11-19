@@ -116,3 +116,21 @@ fallaron por generación, no por hallazgos — `review-reliability` agotó los
 nombre) no es lo que resuelve el modelo: eso vive en
 `~/.gentle-shell/agent/subagents.json` → `model_profiles`. Ahí se cambió ese rol
 a `nan/glm5.3-flash`.
+
+L6 — La review nativa quedó **abierta por una limitación de la herramienta, no del
+código**. Tres generaciones del linaje `review-0c8521a5099ba46c` fallaron igual:
+`review-reliability` agota los ~45.000 tokens de salida razonando y no emite
+veredicto (`stopReason: length`, `textChars: 0`).
+
+El intento de arreglo enseñó dónde vive el modelo de verdad. `config/gentle-ai/
+profiles.json` es el catálogo de perfiles con nombre (`construir`, `ensenar`),
+no lo que se aplica; lo efectivo es `~/.gentle-shell/agent/subagents.json` →
+`model_profiles`, y ahí quedó `review-reliability` en `nan/glm5.3-flash`. Aun así
+las corridas siguieron usando `deepseek-v4-flash`, con los mismos tokens de
+entrada: **los perfiles se resuelven al arrancar la sesión y no se recargan en
+caliente**. Terminar esa review requiere una sesión nueva, o `/gentle:profiles`
+que sí recarga.
+
+Nada de esto toca el estado del trabajo: la verificación independiente corrió
+completa (S1 con un defecto real encontrado y corregido, S2, S3, S4 y S5 en
+verde), y la suite local está en 65 tests, `tsc`, `lint` y 4/4 e2e.
