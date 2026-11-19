@@ -46,6 +46,55 @@ export const esquemaListado = z.object({
     .optional(),
 })
 
+export const esquemaListadoVentas = z.object({
+  // El cursor es el `numero` de la última venta recibida: único y monótono, así que
+  // una venta nueva no descoloca la página siguiente.
+  cursor: z.coerce.number().int().min(1).optional(),
+  limite: z.coerce.number().int().min(1).max(100).optional(),
+})
+
+const MEDIOS_DE_PAGO = ['EFECTIVO', 'TRANSFERENCIA', 'TARJETA'] as const
+
+export const esquemaNuevaVenta = z
+  .object({
+    items: z
+      .array(
+        z.object({
+          productoId: z.string().min(1),
+          cantidad: z.number().int().positive(),
+        }),
+      )
+      .min(1),
+    // Exactamente uno de los dos, igual que el servicio: o se detallan los pagos, o
+    // se indica un medio y el monto lo calcula el servidor con el precio real.
+    medioPago: z.enum(MEDIOS_DE_PAGO).optional(),
+    pagos: z
+      .array(
+        z.object({
+          medio: z.enum(MEDIOS_DE_PAGO),
+          montoCentavos: z.number().int().positive(),
+        }),
+      )
+      .min(1)
+      .optional(),
+  })
+  .refine((venta) => (venta.pagos === undefined) !== (venta.medioPago === undefined), {
+    message: 'indicá pagos o medioPago, pero no ambos ni ninguno',
+  })
+
+/**
+ * Clave de idempotencia del header `Idempotency-Key`.
+ * Se acota a un alfabeto seguro porque este valor termina en un índice único y en
+ * un log: un salto de línea o un byte nulo ahí es un problema, no un dato.
+ */
+export const esquemaIdempotencyKey = z
+  .string()
+  .min(1)
+  .max(200)
+  .regex(/^[A-Za-z0-9_.:-]+$/, 'sólo letras, números, punto, dos puntos, guion y guion bajo')
+
+export type EntradaNuevaVenta = z.infer<typeof esquemaNuevaVenta>
+
 export type EntradaNuevoProducto = z.infer<typeof esquemaNuevoProducto>
 export type EntradaEditarProducto = z.infer<typeof esquemaEditarProducto>
 export type EntradaAjusteStock = z.infer<typeof esquemaAjusteStock>
