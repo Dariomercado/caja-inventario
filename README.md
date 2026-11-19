@@ -167,7 +167,7 @@ independientes y un Postgres de servicio cada uno:
 
 | Job | Qué corre |
 | --- | --- |
-| `checks` | 62 tests de servicios, `eslint`, `tsc --noEmit` y `next build` |
+| `checks` | 65 tests de servicios, `eslint`, `next build` y `tsc --noEmit` |
 | `e2e` | Chromium y `npm run test:e2e` sobre el build de producción |
 
 Si el job de e2e falla, el pipeline guarda trazas y capturas por 7 días.
@@ -241,7 +241,7 @@ plataforma.
 
 ## Estado
 
-Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 62
+Deployado en <https://caja-inventario-sage.vercel.app> sobre Supabase + Vercel, con 65
 tests de servicios y 4 pruebas de navegador. Verificado en producción: rutas protegidas sin
 fuga de datos (307 anónimo con cuerpo vacío), login con cookie firmada validada en el
 middleware, y una venta real de 2 unidades con su descuento de stock, su pago y el reporte

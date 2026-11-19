@@ -62,11 +62,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Tipos
-        run: npx tsc --noEmit
-
+      # El build va antes de los tipos: `next build` genera `next-env.d.ts`, que está
+      # gitignoreado y declara globales como `LayoutProps`. En un checkout limpio, sin
+      # ese archivo, `tsc` falla con TS2304. Lo fija `src/test/ci.test.ts`.
       - name: Build
         run: npm run build
+
+      - name: Tipos
+        run: npx tsc --noEmit
 
   e2e:
     name: E2E con navegador

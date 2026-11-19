@@ -7,7 +7,7 @@ verificación automática que hoy sólo corre en la máquina del autor.
 ## Specs
 
 S1. **El repo se valida solo.** En cada push a `main` y en cada pull request,
-GitHub Actions corre los tests de servicios (62 al momento de escribir esto),
+GitHub Actions corre los tests de servicios (65 al momento de escribir esto),
 `eslint`, `tsc --noEmit` y `next build`. Un fallo en cualquiera de los cuatro
 corta el pipeline.
 
@@ -92,3 +92,27 @@ de Next (`__next-route-announcer__`) — se filtró por texto —; y la aserció
 reporte miraba la fila 1 de la tabla, que es el día más viejo de un rango de
 siete días, no hoy. Se reemplazó por el monto de la venta en cualquier celda y el
 resumen del período. Segunda corrida: **4 de 4**.
+
+L5 — La verificación independiente encontró lo que yo no: **el pipeline habría
+fallado en el primer push**. El job `checks` corría `npx tsc --noEmit` antes de
+`npm run build`, y en un checkout limpio `next-env.d.ts` no existe todavía —está
+gitignoreado y lo genera el build—, así que `tsc` abortaba con `TS2304: Cannot
+find name 'LayoutProps'`. En mi máquina pasaba porque el archivo ya estaba
+generado: el clásico verde que sólo existe en la máquina del autor.
+
+Se arregló test-first: `src/test/ci.test.ts` fija las relaciones de orden del
+workflow (build antes de tipos, migraciones antes de tests, sin
+`continue-on-error`). Rojo primero —1 de 3—, verde después de mover el paso.
+La suite pasó de 62 a 65 tests y los conteos del README se corrigieron.
+
+Del mismo verificador quedaron dos avisos anotados, no bloqueantes: correr
+`npx playwright test` saltándose `npm run test:e2e` no vacía la base, así que la
+segunda corrida puede chocar con el estado de la primera; y la prueba de rutas
+protegidas podría mirar el cuerpo del redirect y no la pantalla de login.
+
+Sobre la review nativa: las dos corridas del linaje `review-0c8521a5099ba46c`
+fallaron por generación, no por hallazgos — `review-reliability` agotó los
+~45.000 tokens de salida razonando. `profiles.json` (el catálogo de perfiles con
+nombre) no es lo que resuelve el modelo: eso vive en
+`~/.gentle-shell/agent/subagents.json` → `model_profiles`. Ahí se cambió ese rol
+a `nan/glm5.3-flash`.
