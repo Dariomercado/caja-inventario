@@ -95,6 +95,42 @@ export const esquemaIdempotencyKey = z
 
 export type EntradaNuevaVenta = z.infer<typeof esquemaNuevaVenta>
 
+/**
+ * Fecha de calendario en `YYYY-MM-DD`.
+ *
+ * No alcanza con el formato: `new Date('2026-02-30')` no falla, normaliza al 2 de
+ * marzo. Comparar la fecha de vuelta con la de entrada es lo que detecta el 30 de
+ * febrero y el 31 de abril, que es exactamente el error que un consumidor comete al
+ * armar un rango con aritmética propia.
+ */
+export const fechaISO = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'formato YYYY-MM-DD')
+  .refine((valor) => {
+    const fecha = new Date(`${valor}T00:00:00Z`)
+    return !Number.isNaN(fecha.getTime()) && fecha.toISOString().slice(0, 10) === valor
+  }, 'no es una fecha del calendario')
+
+export const esquemaRango = z
+  .object({ desde: fechaISO, hasta: fechaISO })
+  .refine((rango) => rango.desde <= rango.hasta, {
+    message: 'no puede ser posterior a "hasta"',
+    path: ['desde'],
+  })
+
+export const esquemaTopProductosQuery = z
+  .object({
+    desde: fechaISO,
+    hasta: fechaISO,
+    limite: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .refine((rango) => rango.desde <= rango.hasta, {
+    message: 'no puede ser posterior a "hasta"',
+    path: ['desde'],
+  })
+
+export const esquemaCajaQuery = z.object({ fecha: fechaISO })
+
 export type EntradaNuevoProducto = z.infer<typeof esquemaNuevoProducto>
 export type EntradaEditarProducto = z.infer<typeof esquemaEditarProducto>
 export type EntradaAjusteStock = z.infer<typeof esquemaAjusteStock>
