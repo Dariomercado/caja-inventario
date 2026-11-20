@@ -111,6 +111,18 @@ model UsoTokenApi {
   @@index([ventana])
 }
 
+/// Contador diario de llamadas al modelo del asistente.
+///
+/// No se reusa `UsoTokenApi` porque cuenta otra cosa: aquel limita pedidos por
+/// minuto a la API, éste limita llamadas al modelo por día, que son las que cuestan
+/// plata y las que pueden vaciar un plan. La fecha es la clave: una fila por día y el
+/// incremento es un único INSERT ... ON CONFLICT DO UPDATE ... RETURNING, así que dos
+/// instancias del servidor no pueden contar de menos.
+model UsoModeloDiario {
+  fecha    DateTime @id @db.Date
+  llamadas Int      @default(0)
+}
+
 model Producto {
   id             String   @id @default(cuid())
   sku            String   @unique
