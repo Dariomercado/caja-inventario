@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ConfigIncompletaError,
   ConfigInvalidaError,
+  LLAMADAS_POR_DIA_POR_DEFECTO,
   MAX_PRODUCTOS_POR_DEFECTO,
   MAX_RONDAS_POR_DEFECTO,
   MODELO_BASE_URL_POR_DEFECTO,
@@ -25,6 +26,7 @@ describe('configuración del asistente', () => {
     expect(config.modelo.temperatura).toBe(TEMPERATURA_POR_DEFECTO)
     expect(config.modelo.maxRondas).toBe(MAX_RONDAS_POR_DEFECTO)
     expect(config.modelo.maxProductos).toBe(MAX_PRODUCTOS_POR_DEFECTO)
+    expect(config.modelo.maxLlamadasPorDia).toBe(LLAMADAS_POR_DIA_POR_DEFECTO)
     expect(config.api.baseUrl).toBe('https://panel.example.com')
     expect(config.api.token).toBe('cji_prueba')
   })

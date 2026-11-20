@@ -89,7 +89,12 @@ evidencia que mostrar.
   191/191, `tsc` y `eslint` limpios.
 - **T3 — Pantalla del asistente.** Ruta dentro de `(panel)`, protegida por la sesión,
   con el historial del intento, el estado de cada llamada y el modo replay visible.
-  Specs: S1, S5, S10.
+  Specs: S1, S5, S10. Hecho: `/asistente` en el `matcher` del middleware (no alcanzaba
+  con el guard del layout), acción `conversar` que revalida la sesión porque una
+  acción es un endpoint más, y transcript visible: el navegador manda quién dijo qué,
+  nunca mensajes `tool` ni el de sistema. La clave de idempotencia vive en el
+  navegador, que es lo que hace que un segundo "dale" reenvíe la misma clave (S5).
+  Evidencia: build con `/asistente` como ruta dinámica, 5 tests de la conversación.
 - **T4 — Token y emisión para el asistente.** Token con los cuatro scopes, emitido y
   guardado como variable de entorno, sin ampliar scopes a mano por conveniencia.
   Specs: S4.
@@ -100,7 +105,13 @@ evidencia que mostrar.
   consulta la base para verificar efectos y emite la tabla con tokens y latencia.
   Specs: S8, S9, S14.
 - **T7 — Tope diario y modo replay.** Contador en la base, corte diario y última
-  corrida grabada servida cuando no hay presupuesto. Specs: S10, S13.
+  corrida grabada servida cuando no hay presupuesto. Specs: S10, S13. Hecho el
+  contador: tabla `UsoModeloDiario` (una fila por día UTC, incremento atómico),
+  `reservadorDeCupo` que el loop llama **antes** de cada llamada al modelo —un pedido
+  con cuatro rondas gasta cinco— y `SinPresupuestoDiarioError` que la acción traduce a
+  modo replay visible. La corrida grabada queda para T6, que es donde existe el
+  formato de fixture. Evidencia: 6 tests del contador, 2 del loop (no llama al modelo
+  sin presupuesto), migración aplicada en `caja` y `caja_test`.
 - **T8 — CI.** El nivel offline corre en cada push y PR sin secret; el live se saltea
   con un mensaje explícito cuando la clave no está. Specs: S8.
 - **T9 — Documentación.** README: qué hace el asistente, cómo se corren las evals, qué
@@ -193,3 +204,27 @@ escribirlo, no al especificarlo:
    `POST /ventas` el esquema `esquemaVentaDetalle`, pero el handler devuelve sólo
    `{ id, numero, totalCentavos }`. Es una divergencia de documentación preexistente;
    queda anotada como aviso para no mezclarla con esta etapa.
+
+**L9 — T7 antes que T3, y la pantalla.** El orden de las tasks cambió: el contador
+(T7) se hizo antes de la pantalla (T3) porque la pantalla tiene que mostrar el modo
+replay, y mostrarlo antes de que exista el contador sería un cartel sin leyenda.
+
+1. **El cupo se gasta por llamada al modelo, no por pedido.** Un pedido de cuatro
+   rondas gasta cinco llamadas. Se reserva antes de cada una, con un hook que el loop
+   invoca: si el presupuesto se agota en la tercera ronda, el turno se corta ahí en
+   lugar de seguir gastando.
+2. **La acción revalida la sesión.** Una Server Action es un endpoint más y no hereda
+   la protección de la pantalla que la invoca.
+3. **El navegador no manda mensajes internos.** Viaja un transcript de "quién dijo
+   qué"; el mensaje de sistema lo pone el servidor y los `role: "tool"` los produce
+   el loop. Si el cliente pudiera mandarlos, cualquiera podría inventar el resultado
+   de una consulta.
+4. **La clave de idempotencia vive en el navegador.** Es lo que hace que un segundo
+   mensaje confirmando reenvíe la misma clave y el servidor devuelva la venta que ya
+   existe en lugar de crear otra (S5). En el servidor habría que inventar una sesión
+   de charla para encontrarla.
+5. **`/asistente` se agregó al `matcher` del middleware**, no sólo al layout: el
+   layout renderiza en paralelo con la página y para cuando redirige los datos ya
+   viajaron.
+6. **Pendiente de T6:** servir la corrida grabada cuando el presupuesto se agota. Hoy
+   el modo replay se muestra y explica, pero no reproduce nada.

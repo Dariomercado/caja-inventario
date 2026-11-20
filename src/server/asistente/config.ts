@@ -19,6 +19,8 @@ export type ConfigModelo = {
   maxRondas: number
   /** Tope de productos que se le pasan al modelo en una respuesta (S11). */
   maxProductos: number
+  /** Tope de llamadas al modelo por día, en total (S10). */
+  maxLlamadasPorDia: number
   /** Corte de una llamada colgada: sin esto el panel queda esperando para siempre. */
   tiempoMaximoMs: number
 }
@@ -38,6 +40,7 @@ export const MODELO_POR_DEFECTO = 'glm-5.3-flash'
 export const TEMPERATURA_POR_DEFECTO = 0.2
 export const MAX_RONDAS_POR_DEFECTO = 4
 export const MAX_PRODUCTOS_POR_DEFECTO = 20
+export const LLAMADAS_POR_DIA_POR_DEFECTO = 300
 export const TIEMPO_MAXIMO_POR_DEFECTO = 60_000
 
 export class ConfigIncompletaError extends Error {
@@ -88,6 +91,11 @@ export function configDesde(
       temperatura: numero('ASISTENTE_MODELO_TEMPERATURA', TEMPERATURA_POR_DEFECTO, 0, 2),
       maxRondas: numero('ASISTENTE_MAX_RONDAS', MAX_RONDAS_POR_DEFECTO, 1, 20),
       maxProductos: numero('ASISTENTE_MAX_PRODUCTOS', MAX_PRODUCTOS_POR_DEFECTO, 1, 100),
+      maxLlamadasPorDia: numero(
+        'ASISTENTE_LLAMADAS_POR_DIA',
+        LLAMADAS_POR_DIA_POR_DEFECTO,
+        1,
+      ),
       tiempoMaximoMs: numero('ASISTENTE_TIEMPO_MAXIMO_MS', TIEMPO_MAXIMO_POR_DEFECTO, 1_000),
     },
     api: {

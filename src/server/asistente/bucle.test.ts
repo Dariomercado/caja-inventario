@@ -223,6 +223,43 @@ describe('loop de herramientas', () => {
     expect(ejecutadas[0]?.argumentos).toBeUndefined()
   })
 
+  it('con el presupuesto diario agotado no llega a llamar al modelo', async () => {
+    const { modelo, peticiones } = modeloFalso([responderTexto('listo')])
+    const { herramientas } = herramientasFalsas()
+
+    await expect(
+      ejecutarTurno({
+        modelo,
+        herramientas,
+        mensajes: BASE,
+        maxRondas: 4,
+        reservarLlamada: async () => {
+          throw new Error('sin presupuesto')
+        },
+      }),
+    ).rejects.toThrow('sin presupuesto')
+
+    expect(peticiones).toHaveLength(0)
+  })
+
+  it('reserva una llamada por cada llamada real al modelo', async () => {
+    const { modelo } = modeloFalso([pedirHerramienta('c1'), responderTexto('listo')])
+    const { herramientas } = herramientasFalsas()
+    let reservadas = 0
+
+    await ejecutarTurno({
+      modelo,
+      herramientas,
+      mensajes: BASE,
+      maxRondas: 4,
+      reservarLlamada: async () => {
+        reservadas += 1
+      },
+    })
+
+    expect(reservadas).toBe(2)
+  })
+
   it('ejecuta todas las herramientas de una misma respuesta', async () => {
     const dosEnUna: MensajeAsistente = {
       role: 'assistant',

@@ -42,6 +42,11 @@ export type EntradaTurno = {
   mensajes: Mensaje[]
   claveIdempotencia?: string
   maxRondas: number
+  /**
+   * Se llama antes de cada llamada al modelo. Es donde entra el cupo diario (S10):
+   * si lanza, el turno se corta ahí en lugar de seguir gastando.
+   */
+  reservarLlamada?: () => Promise<void>
   onEvento?: (evento: EventoTurno) => void
 }
 
@@ -56,6 +61,8 @@ export async function ejecutarTurno(entrada: EntradaTurno): Promise<ResultadoTur
   while (true) {
     const ofrecerHerramientas = ronda < entrada.maxRondas
     if (!ofrecerHerramientas) topeAlcanzado = true
+
+    await entrada.reservarLlamada?.()
 
     const { mensaje, uso: usoDeLaRonda } = await entrada.modelo.completar({
       mensajes,
