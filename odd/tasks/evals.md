@@ -392,3 +392,12 @@ carga el propio corredor con `dotenv`, sin sobrescribir lo que ya esté en el en
 4. **Los fixtures siguen escritos a mano.** Es el paso honesto que falta: que el corredor
    grabe una corrida live y reemplace `evals/fixtures/`. Hoy la evidencia del nivel live es
    la tabla de la corrida, no un archivo versionado.
+
+**L14 — `--grabar`: los fixtures pasan a ser capturas, y una captura que no reproduce no reemplaza nada.** Cierra el pendiente de L13.4.
+
+1. **La captura vive en el borde del transporte del modelo.** `fabricaLive(configuracion, { grabar: true })` envuelve el transporte, clona la respuesta y la valida contra `esquemaRespuestaGrabada` antes de guardarla: lo que se escribe es exactamente el cuerpo del proveedor y exactamente la forma que `caso.ts` ya carga. No hay un segundo formato de fixture.
+2. **`--grabar` exige `--live`.** Solo, aborta con mensaje y salida 1: el nivel offline no llama a nadie, así que no habría nada que grabar.
+3. **`decidirGrabado` es la puerta, y es una función con tests.** Escribe sólo el caso cuya corrida live cumplió sus efectos y cuya captura trae un bloque por intento. Un caso que falló en vivo, uno que el nivel no corre y una captura con el número equivocado de bloques conservan su archivo, con el motivo impreso. Nada se debilita para que una captura pase: si no reproduce, es un hallazgo.
+4. **La re-corrida offline va en la misma corrida.** Después de escribir, el corredor relee los casos del disco y corre el nivel offline completo. Si un caso recién grabado falla, restaura los bytes anteriores de ese archivo y sale con código 1, diciendo cuál y qué efecto no reprodujo. Nunca se pierde la baseline.
+5. **Resultado de la corrida autorizada (2026-11-20, `glm5.3-flash`):** live **6/6** con 3 `skip` (`TOTAL (6 cases, 6 pass, 0 fail, 3 skipped)`), **33.954** tokens de entrada y **2.131** de salida —del orden de US$0.006 con Flash—; se reemplazaron **6** fixtures (`01`, `02`, `03`, `05`, `06`, `08`) y la re-corrida offline dio **9/9** sin ninguna restauración: las seis capturas reproducen sus efectos. Los tres casos de harness (`04`, `07`, `09`) siguen escritos a mano a propósito: prueban el harness y el modelo real no recorre ese camino, así que no hay nada que grabar.
+6. **Evidencia:** suite **252/252** (9 tests de grabación), `tsc` y `eslint` limpios, `npm run evals` **9/9** ahora desde las capturas (43.124 y 2.446 tokens reproducidos, costo cero).

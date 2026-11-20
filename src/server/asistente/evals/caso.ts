@@ -249,9 +249,28 @@ const esquemaRespuestaGrabada = z
   .passthrough()
 
 /** One block per attempt: the replay case plays the same block twice, same key. */
-const esquemaFixture = z
+export const esquemaFixture = z
   .object({ attempts: z.array(z.array(esquemaRespuestaGrabada).min(1)).min(1) })
   .strict()
+
+/**
+ * Validates one provider body as a recorded response.
+ *
+ * The live transport calls this before recording anything (`--grabar`): a capture
+ * that the loader would reject is not a fixture, and writing it would leave the
+ * offline tier with a file it cannot read. It fails loudly instead.
+ */
+export function leerRespuestaGrabada(crudo: unknown): RespuestaGrabada {
+  const resultado = esquemaRespuestaGrabada.safeParse(crudo)
+  if (!resultado.success) {
+    const detalle = resultado.error.issues
+      .map((problema) => `${problema.path.join('.') || 'raíz'}: ${problema.message}`)
+      .join('; ')
+    throw new Error(`La respuesta del proveedor no tiene la forma de un fixture: ${detalle}`)
+  }
+
+  return resultado.data
+}
 
 export type ProductoSembrado = z.infer<typeof esquemaProductoSembrado>
 export type TurnoDelCaso = z.infer<typeof esquemaTurno>
