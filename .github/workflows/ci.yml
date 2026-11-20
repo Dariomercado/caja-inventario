@@ -1,7 +1,8 @@
 name: CI
 
 # Dos jobs con el mismo Postgres de servicio:
-#   - checks: la suite de servicios, eslint, tsc y el build.
+#   - checks: la suite de servicios, las evals offline del asistente, eslint, tsc y
+#     el build.
 #   - e2e: Playwright sobre la aplicación compilada, por `npm run test:e2e`.
 # El de e2e repite el build dentro de su propio `webServer` (Playwright lo levanta),
 # así que no comparte artefactos: cada job es autónomo y puede fallar solo.
@@ -58,6 +59,13 @@ jobs:
 
       - name: Tests de servicios
         run: npm test
+
+      # El nivel offline de las evals usa fixtures y transporte en proceso contra los
+      # Route Handlers: sin red, sin servidor y sin secretos. La única dependencia real
+      # es la base `*_test` del job, que ya está migrada. Un caso que falla rompe el
+      # step y el job, que es lo que tiene que pasar. El nivel live no se corre acá.
+      - name: Evals offline del asistente
+        run: npm run evals
 
       - name: Lint
         run: npm run lint
