@@ -1,0 +1,52 @@
+{
+  "attempts": [
+    [
+      {
+        "id": "chatcmpl-eval-ambiguous-product-1",
+        "object": "chat.completion",
+        "created": 1764000100,
+        "model": "glm-5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "«Dos azúcares» puede ser común o light. Antes de vender necesito el catálogo y después pregunto con las opciones concretas.",
+              "tool_calls": [
+                {
+                  "id": "call_ambiguous_1",
+                  "type": "function",
+                  "function": {
+                    "name": "listar_productos",
+                    "arguments": "{\"solo_activos\":true}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": { "prompt_tokens": 960, "completion_tokens": 46, "total_tokens": 1006 }
+      },
+      {
+        "id": "chatcmpl-eval-ambiguous-product-2",
+        "object": "chat.completion",
+        "created": 1764000101,
+        "model": "glm-5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Hay dos azúcares en el catálogo: «Azúcar común 1 kg» (SKU AZU-COMUN-1KG, $1.500) y «Azúcar light 1 kg» (SKU AZU-LIGHT-1KG, $1.800). ¿Cuál de las dos querés?",
+              "reasoning_content": "La ambigüedad es real: no elijo por el usuario. Ofrezco las opciones que devolvió la API y no registro nada todavía."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": { "prompt_tokens": 1240, "completion_tokens": 62, "total_tokens": 1302 }
+      }
+    ]
+  ]
+}

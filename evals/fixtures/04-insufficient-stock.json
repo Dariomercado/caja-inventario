@@ -1,0 +1,80 @@
+{
+  "attempts": [
+    [
+      {
+        "id": "chatcmpl-eval-insufficient-1",
+        "object": "chat.completion",
+        "created": 1764000300,
+        "model": "glm-5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "Primero miro el stock real. Si no alcanza, no voy a inventar una cantidad distinta.",
+              "tool_calls": [
+                {
+                  "id": "call_insufficient_1",
+                  "type": "function",
+                  "function": {
+                    "name": "listar_productos",
+                    "arguments": "{\"solo_activos\":true}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": { "prompt_tokens": 970, "completion_tokens": 38, "total_tokens": 1008 }
+      },
+      {
+        "id": "chatcmpl-eval-insufficient-2",
+        "object": "chat.completion",
+        "created": 1764000301,
+        "model": "glm-5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "El usuario pidió 5 y hay 2. Registro el intento tal como lo pidió: la API es la que decide y devuelve el error con el disponible.",
+              "tool_calls": [
+                {
+                  "id": "call_insufficient_2",
+                  "type": "function",
+                  "function": {
+                    "name": "registrar_venta",
+                    "arguments": "{\"items\":[{\"producto_id\":\"prod_azucar_comun\",\"cantidad\":5}],\"medio_pago\":\"EFECTIVO\"}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": { "prompt_tokens": 1250, "completion_tokens": 55, "total_tokens": 1305 }
+      },
+      {
+        "id": "chatcmpl-eval-insufficient-3",
+        "object": "chat.completion",
+        "created": 1764000302,
+        "model": "glm-5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "No puedo registrar esa venta: quedan 2 unidades de Azúcar común 1 kg y pediste 5. No se descontó stock.",
+              "reasoning_content": "La API devolvió 409 stock_insuficiente con el disponible. Informo el número tal cual y no reintento con otra cantidad."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": { "prompt_tokens": 1330, "completion_tokens": 47, "total_tokens": 1377 }
+      }
+    ]
+  ]
+}

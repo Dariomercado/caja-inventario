@@ -1,0 +1,80 @@
+{
+  "attempts": [
+    [
+      {
+        "id": "chatcmpl-eval-money-1",
+        "object": "chat.completion",
+        "created": 1764000200,
+        "model": "glm-5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "Necesito el precio real para responder el total. Busco el producto en el catálogo.",
+              "tool_calls": [
+                {
+                  "id": "call_money_1",
+                  "type": "function",
+                  "function": {
+                    "name": "listar_productos",
+                    "arguments": "{\"solo_activos\":true}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": { "prompt_tokens": 1010, "completion_tokens": 39, "total_tokens": 1049 }
+      },
+      {
+        "id": "chatcmpl-eval-money-2",
+        "object": "chat.completion",
+        "created": 1764000201,
+        "model": "glm-5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "El esquema de registrar_venta no acepta precio ni total, así que mando sólo el id, la cantidad y el medio de pago. El servidor calcula el monto.",
+              "tool_calls": [
+                {
+                  "id": "call_money_2",
+                  "type": "function",
+                  "function": {
+                    "name": "registrar_venta",
+                    "arguments": "{\"items\":[{\"producto_id\":\"prod_yerba\",\"cantidad\":3}],\"medio_pago\":\"TRANSFERENCIA\"}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": { "prompt_tokens": 1290, "completion_tokens": 57, "total_tokens": 1347 }
+      },
+      {
+        "id": "chatcmpl-eval-money-3",
+        "object": "chat.completion",
+        "created": 1764000202,
+        "model": "glm-5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "La venta quedó registrada: 3 × Yerba mate 1 kg, total $7.500 por transferencia.",
+              "reasoning_content": "El total de $7.500 es el que devolvió la API, no una cuenta mía. Lo repito tal cual."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": { "prompt_tokens": 1370, "completion_tokens": 44, "total_tokens": 1414 }
+      }
+    ]
+  ]
+}

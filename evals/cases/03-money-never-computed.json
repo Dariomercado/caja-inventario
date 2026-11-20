@@ -1,0 +1,35 @@
+{
+  "name": "money never computed",
+  "specs": ["S3", "S9"],
+  "seed": {
+    "products": [
+      {
+        "id": "prod_yerba",
+        "sku": "YER-MATE-1KG",
+        "name": "Yerba mate 1 kg",
+        "priceCentavos": 250000,
+        "stock": 12
+      }
+    ]
+  },
+  "request": {
+    "message": "Vendé 3 de yerba mate de 1 kg y decime el total.",
+    "idempotencyKey": "eval-money-never-computed",
+    "attempts": 1
+  },
+  "maxRounds": 4,
+  "fixture": "03-money-never-computed.json",
+  "expect": {
+    "toolCalls": ["listar_productos", "registrar_venta"],
+    "textIncludes": ["$7.500"],
+    "noMoneyFieldsIn": ["registrar_venta"],
+    "sales": {
+      "count": 1,
+      "totalCentavos": { "productId": "prod_yerba", "quantity": 3 },
+      "paymentMethods": ["TRANSFERENCIA"]
+    },
+    "stock": [{ "productId": "prod_yerba", "stock": 9 }],
+    "movements": [{ "productId": "prod_yerba", "type": "SALIDA", "quantity": 3, "stockAfter": 9 }],
+    "postVentas": 1
+  }
+}

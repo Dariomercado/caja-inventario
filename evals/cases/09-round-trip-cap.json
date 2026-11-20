@@ -1,0 +1,30 @@
+{
+  "name": "round-trip cap",
+  "specs": ["S10", "S9"],
+  "seed": {
+    "products": [
+      {
+        "id": "prod_azucar_comun",
+        "sku": "AZU-COMUN-1KG",
+        "name": "Azúcar común 1 kg",
+        "priceCentavos": 150000,
+        "stock": 10
+      }
+    ]
+  },
+  "request": {
+    "message": "¿Cuánto stock hay? Repetí la consulta hasta estar seguro.",
+    "idempotencyKey": "eval-round-trip-cap",
+    "attempts": 1
+  },
+  "maxRounds": 2,
+  "fixture": "09-round-trip-cap.json",
+  "expect": {
+    "toolCalls": ["listar_productos", "listar_productos"],
+    "topReached": true,
+    "modelCalls": 3,
+    "sales": { "count": 0 },
+    "stock": [{ "productId": "prod_azucar_comun", "stock": 10 }],
+    "postVentas": 0
+  }
+}

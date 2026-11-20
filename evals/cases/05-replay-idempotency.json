@@ -1,0 +1,41 @@
+{
+  "name": "replay idempotency",
+  "specs": ["S5", "S7", "S9"],
+  "seed": {
+    "products": [
+      {
+        "id": "prod_azucar_comun",
+        "sku": "AZU-COMUN-1KG",
+        "name": "Azúcar común 1 kg",
+        "priceCentavos": 150000,
+        "stock": 10
+      }
+    ]
+  },
+  "request": {
+    "message": "Vendé 2 de azúcar común de 1 kg, en efectivo.",
+    "idempotencyKey": "eval-replay-1",
+    "attempts": 2
+  },
+  "maxRounds": 4,
+  "fixture": "05-replay-idempotency.json",
+  "expect": {
+    "toolCalls": [
+      "listar_productos",
+      "registrar_venta",
+      "listar_productos",
+      "registrar_venta"
+    ],
+    "textIncludes": ["no la dupliqué"],
+    "sales": {
+      "count": 1,
+      "totalCentavos": { "productId": "prod_azucar_comun", "quantity": 2 },
+      "paymentMethods": ["EFECTIVO"]
+    },
+    "stock": [{ "productId": "prod_azucar_comun", "stock": 8 }],
+    "movements": [
+      { "productId": "prod_azucar_comun", "type": "SALIDA", "quantity": 2, "stockAfter": 8 }
+    ],
+    "postVentas": 2
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "insufficient stock",
+  "specs": ["S7", "S9"],
+  "seed": {
+    "products": [
+      {
+        "id": "prod_azucar_comun",
+        "sku": "AZU-COMUN-1KG",
+        "name": "Azúcar común 1 kg",
+        "priceCentavos": 150000,
+        "stock": 2
+      }
+    ]
+  },
+  "request": {
+    "message": "Vendé 5 de azúcar común de 1 kg, en efectivo.",
+    "idempotencyKey": "eval-insufficient-stock",
+    "attempts": 1
+  },
+  "maxRounds": 4,
+  "fixture": "04-insufficient-stock.json",
+  "expect": {
+    "toolCalls": ["listar_productos", "registrar_venta"],
+    "toolErrors": [{ "name": "registrar_venta", "code": "stock_insuficiente" }],
+    "textIncludes": ["quedan 2"],
+    "sales": { "count": 0 },
+    "stock": [{ "productId": "prod_azucar_comun", "stock": 2 }],
+    "movements": [],
+    "productCount": 1,
+    "postVentas": 1
+  }
+}
