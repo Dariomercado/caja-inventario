@@ -196,6 +196,25 @@ export const esquemaPaginaVentas: z.ZodType<{
   siguienteCursor: z.number().int().nullable(),
 })
 
+/**
+ * Lo que devuelve `POST /ventas`, que es menos que el detalle a propósito: el reenvío
+ * con la misma clave devuelve el mismo cuerpo, y un cliente que sólo mira el cuerpo
+ * funciona igual en los dos casos.
+ *
+ * Está acá y no escrito a mano en el documento porque el documento tiene que decir la
+ * verdad: antes declaraba `esquemaVentaDetalle` y prometía `lineas` y `pagos` que el
+ * endpoint nunca manda.
+ */
+export const esquemaVentaRegistrada: z.ZodType<{
+  id: string
+  numero: number
+  totalCentavos: number
+}> = z.object({
+  id: z.string(),
+  numero: z.number().int(),
+  totalCentavos: z.number().int(),
+})
+
 export const esquemaVentaDetalle: z.ZodType<VentaDetalle> = z.object({
   id: z.string(),
   numero: z.number().int(),
