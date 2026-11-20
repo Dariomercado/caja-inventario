@@ -8,7 +8,7 @@ import { prisma } from '../lib/db'
 // date_trunc('day', "createdAt") sin AT TIME ZONE, esas ventas caen en el día
 // equivocado y la caja diaria no cierra. Argentina no aplica horario de verano
 // desde 2009, así que sumar interval '1 day' equivale a un día calendario.
-const ZONA = 'America/Argentina/Buenos_Aires'
+export const ZONA_NEGOCIO = 'America/Argentina/Buenos_Aires'
 
 export type ResumenDia = {
   fecha: string
@@ -44,12 +44,12 @@ export async function resumenPorDia(rango: {
 }): Promise<ResumenDia[]> {
   return prisma.$queryRaw<ResumenDia[]>`
     SELECT
-      to_char(d.dia AT TIME ZONE ${ZONA}, 'YYYY-MM-DD') AS "fecha",
+      to_char(d.dia AT TIME ZONE ${ZONA_NEGOCIO}, 'YYYY-MM-DD') AS "fecha",
       COUNT(v."id")::int                              AS "cantidadVentas",
       COALESCE(SUM(v."totalCentavos"), 0)::int        AS "totalCentavos"
     FROM generate_series(
-      (${rango.desde}::date)::timestamp AT TIME ZONE ${ZONA},
-      (${rango.hasta}::date)::timestamp AT TIME ZONE ${ZONA},
+      (${rango.desde}::date)::timestamp AT TIME ZONE ${ZONA_NEGOCIO},
+      (${rango.hasta}::date)::timestamp AT TIME ZONE ${ZONA_NEGOCIO},
       interval '1 day'
     ) AS d(dia)
     LEFT JOIN "Venta" v
@@ -76,8 +76,8 @@ export async function topProductos(rango: {
     FROM "LineaVenta" lv
     JOIN "Venta" v    ON v."id" = lv."ventaId"
     JOIN "Producto" p ON p."id" = lv."productoId"
-    WHERE v."createdAt" >= (${rango.desde}::date)::timestamp AT TIME ZONE ${ZONA}
-      AND v."createdAt" <  ((${rango.hasta}::date + 1)::timestamp AT TIME ZONE ${ZONA})
+    WHERE v."createdAt" >= (${rango.desde}::date)::timestamp AT TIME ZONE ${ZONA_NEGOCIO}
+      AND v."createdAt" <  ((${rango.hasta}::date + 1)::timestamp AT TIME ZONE ${ZONA_NEGOCIO})
     GROUP BY lv."productoId", p."nombre"
     ORDER BY "cantidadVendida" DESC, "totalCentavos" DESC, p."nombre" ASC
     LIMIT ${limite}
@@ -91,8 +91,8 @@ export async function cajaDelDia(rango: { fecha: string }): Promise<CajaDelDia> 
       COUNT(*)::int                   AS "cantidadPagos",
       SUM(pago."montoCentavos")::int  AS "totalCentavos"
     FROM "Pago" pago
-    WHERE pago."createdAt" >= (${rango.fecha}::date)::timestamp AT TIME ZONE ${ZONA}
-      AND pago."createdAt" <  ((${rango.fecha}::date + 1)::timestamp AT TIME ZONE ${ZONA})
+    WHERE pago."createdAt" >= (${rango.fecha}::date)::timestamp AT TIME ZONE ${ZONA_NEGOCIO}
+      AND pago."createdAt" <  ((${rango.fecha}::date + 1)::timestamp AT TIME ZONE ${ZONA_NEGOCIO})
     GROUP BY pago."medio"
     ORDER BY pago."medio"
   `
