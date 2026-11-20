@@ -68,14 +68,20 @@ const esquemaListarProductos = z.object({
 })
 
 const esquemaVerProducto = z.object({
-  producto_id: z.string().min(1).describe('id del producto tal como lo devolvió la API.'),
+  producto_id: z
+    .string()
+    .min(1)
+    .describe('El campo `id` del producto. No es el `sku`: la API rechaza el SKU.'),
 })
 
 const esquemaRegistrarVenta = z.object({
   items: z
     .array(
       z.object({
-        producto_id: z.string().min(1).describe('id del producto, el que devolvió la API.'),
+        producto_id: z
+          .string()
+          .min(1)
+          .describe('El campo `id` del producto, no el `sku`. Sale de listar_productos.'),
         cantidad: z.number().int().positive().describe('Cantidad de unidades.'),
       }),
     )

@@ -15,23 +15,29 @@ import type { TokenResuelto } from './tokens'
  *
  * El orden es: autenticación (401), autorización (403), cupo (429), acción. Un pedido
  * que no llega a identificarse no consume cupo de nadie.
+ *
+ * El `try` cubre las cuatro etapas, no sólo la acción. Si la base falla mientras se
+ * autentica o se descuenta cupo, el cliente tiene que recibir el mismo sobre
+ * `{ error: { code: 'interno' } }` que ante cualquier otro error del servidor: el 500
+ * por defecto de Next no es JSON parseable, y un cliente que ramifica por `code` se
+ * queda sin nada justo durante el incidente.
  */
 export async function ejecutarAutenticado(
   request: Request,
   scope: ScopeApi,
   accion: (token: TokenResuelto) => Promise<NextResponse>,
 ): Promise<NextResponse> {
-  const autenticacion = await autenticar(request, scope)
-  if (!autenticacion.ok) return autenticacion.respuesta
-
-  const cupo = await consumirCupo(autenticacion.token.id, autenticacion.token.limitePorMinuto)
-  if (!cupo.permitido) {
-    return errorJson('rate_limit_excedido', 'Demasiados pedidos con este token.', {
-      headers: { 'Retry-After': String(cupo.reintentarEnSegundos) },
-    })
-  }
-
   try {
+    const autenticacion = await autenticar(request, scope)
+    if (!autenticacion.ok) return autenticacion.respuesta
+
+    const cupo = await consumirCupo(autenticacion.token.id, autenticacion.token.limitePorMinuto)
+    if (!cupo.permitido) {
+      return errorJson('rate_limit_excedido', 'Demasiados pedidos con este token.', {
+        headers: { 'Retry-After': String(cupo.reintentarEnSegundos) },
+      })
+    }
+
     return await accion(autenticacion.token)
   } catch (error) {
     return respuestaDeErrorDeDominio(error)
