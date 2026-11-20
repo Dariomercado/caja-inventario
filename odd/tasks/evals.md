@@ -228,3 +228,41 @@ replay, y mostrarlo antes de que exista el contador sería un cartel sin leyenda
    viajaron.
 6. **Pendiente de T6:** servir la corrida grabada cuando el presupuesto se agota. Hoy
    el modo replay se muestra y explica, pero no reproduce nada.
+
+**L10 — T5 y T6 implementados: los casos y el corredor.**
+
+1. **Un caso por comportamiento, el fixture aparte.** `evals/cases/*.json` declara el
+   pedido, el fixture, las tool calls esperadas y el estado esperado en la base.
+   `evals/fixtures/<caso>.json` guarda las respuestas en la forma de GLM y las agrupa
+   en un bloque por intento: así el caso de reenvío reproduce dos veces la misma
+   conversación con la misma clave, en lugar de necesitar un caso especial.
+2. **Los productos sembrados llevan `id` explícito.** Un fixture escrito a mano tiene
+   que nombrar el producto en los argumentos de `registrar_venta`; un cuid generado al
+   sembrar sería imposible de escribir de antemano. El seed fija el id, no lo inventa
+   el modelo.
+3. **Los fixtures son escritos a mano, no capturados.** Prueban el harness —elección
+   de tool, argumentos, topes, idempotencia, efectos— y no el modelo. Está dicho en
+   `evals/README.md`: la primera corrida live los reemplaza.
+4. **Offline es transporte en proceso, no HTTP.** El corredor llama a los Route
+   Handlers con un `NextRequest` armado desde el `Request` del cliente, así que auth,
+   scopes, rate limit, validación Zod, idempotencia y sobre de error son los reales,
+   sin servidor ni red. El modelo es un fixture reproducido por el mismo
+   `crearClienteModelo`, así que el loop corre igual que en producción.
+5. **S3 se verifica dos veces en el caso de dinero:** el total de la venta se compara
+   contra `precioCentavos × cantidad` de la semilla, y el JSON Schema de
+   `registrar_venta` se recorre buscando campos de dinero. La expectativa no depende
+   de lo que el modelo diga.
+6. **El guard `_test` corre antes de importar la base** (se reusa el de
+   `src/test/guard.ts`), y `truncarBase` lo repite por caso. El corredor sólo siembra
+   su usuario, su token de cuatro scopes y los productos del caso.
+7. **Live sólo con `--live`.** Sin `ASISTENTE_MODELO_API_KEY` imprime una línea de
+   skip y deja el código de salida en 0; el nivel offline es el default y no toca la
+   red ni necesita secretos.
+8. **Evidencia:** 9 casos, `npm run evals` **9/9** y salida 0, suite **214/214** (10
+   tests nuevos del corredor), `tsc` y `eslint` limpios. El caso de reenvío hace que
+   Prisma registre el error esperado del índice único
+   (`Venta_claveIdempotencia_key`) antes de devolver la venta existente: es el
+   mecanismo de idempotencia, no un fallo del caso.
+9. **Sigue pendiente de T6/T3:** servir la corrida grabada cuando el presupuesto se
+   agota. El formato de fixture ya existe; lo que falta es que la acción reproduzca
+   esa corrida en modo replay.
