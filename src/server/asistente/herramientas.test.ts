@@ -117,6 +117,25 @@ describe('herramientas del asistente', () => {
     expect(datos.truncados).toBe(10)
   })
 
+  it('la venta que ve el modelo trae la hora ya convertida al día del negocio', async () => {
+    const { cliente } = clienteFalso({
+      listarVentas: {
+        ventas: [
+          { id: 'v1', numero: 5, totalCentavos: 360_000, creadaEn: '2026-11-20T09:03:00.000Z' },
+        ],
+        siguienteCursor: null,
+      },
+    })
+    const { ejecutar } = crearHerramientas(cliente, OPCIONES)
+
+    const resultado = await ejecutar('listar_ventas', {}, CONTEXTO)
+
+    // 09:03 UTC son las 06:03 en Buenos Aires: la herramienta le entrega el valor
+    // hecho para que no lo calcule el modelo.
+    const datos = (resultado as { datos: { ventas: { creadaEnLocal: string }[] } }).datos
+    expect(datos.ventas[0]?.creadaEnLocal).toBe('2026-11-20 06:03')
+  })
+
   it('una herramienta inexistente devuelve un error explícito y no rompe el pedido', async () => {
     const { cliente } = clienteFalso()
     const { ejecutar } = crearHerramientas(cliente, OPCIONES)

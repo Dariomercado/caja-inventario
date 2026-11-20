@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { MEDIOS_DE_PAGO } from '@/server/api/esquemas'
 import { ErrorDeApi, ErrorDeRed, type ClienteApi } from './api'
+import { fechaHoraLocal } from './fechas'
 
 /**
  * Herramientas del asistente: la superficie concreta de `/api/v1` (S4).
@@ -155,6 +156,18 @@ function parametrosDe(esquema: z.ZodType): Record<string, unknown> {
   return json
 }
 
+/**
+ * La venta con la hora del negocio ya formateada.
+ *
+ * `creadaEn` viene en UTC y una hora mal traducida no rompe nada: en la primera
+ * corrida real el panel mostró «09:03» cuando eran las 06:03, y una venta de las
+ * 23:30 habría aparecido como del día siguiente. Traducir es una cuenta, y las
+ * cuentas no las hace el modelo.
+ */
+function conHoraLocal<T extends { creadaEn: string }>(venta: T): T & { creadaEnLocal: string } {
+  return { ...venta, creadaEnLocal: fechaHoraLocal(venta.creadaEn) }
+}
+
 type Herramienta = {
   nombre: string
   descripcion: string
@@ -238,7 +251,7 @@ const HERRAMIENTAS: Herramienta[] = [
     esquema: esquemaVerVenta,
     async correr(argumentos, cliente) {
       const datos = parsear(esquemaVerVenta, argumentos)
-      return { ok: true, datos: await cliente.verVenta(datos.venta_id) }
+      return { ok: true, datos: conHoraLocal(await cliente.verVenta(datos.venta_id)) }
     },
   },
 
@@ -249,9 +262,10 @@ const HERRAMIENTAS: Herramienta[] = [
     esquema: esquemaListarVentas,
     async correr(argumentos, cliente) {
       const datos = parsear(esquemaListarVentas, argumentos)
+      const pagina = await cliente.listarVentas({ limite: datos.limite, cursor: datos.cursor })
       return {
         ok: true,
-        datos: await cliente.listarVentas({ limite: datos.limite, cursor: datos.cursor }),
+        datos: { ...pagina, ventas: pagina.ventas.map(conHoraLocal) },
       }
     },
   },

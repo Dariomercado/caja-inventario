@@ -1,7 +1,9 @@
 import { z } from 'zod'
-import { ZONA_NEGOCIO } from '@/server/reportes'
+import { fechaDelNegocio } from './fechas'
 import { INSTRUCCIONES_SISTEMA } from './instrucciones'
 import type { Mensaje } from './modelo'
+
+export { fechaDelNegocio }
 
 /**
  * Qué conversación ve el modelo en cada turno.
@@ -53,20 +55,6 @@ export function mensajesParaElModelo(
     ...historial,
     { role: 'user', content: mensaje },
   ]
-}
-
-/**
- * El día del negocio, en la zona de los reportes.
- *
- * No es el día UTC: una venta de las 23:30 en Buenos Aires ya es el día siguiente
- * en UTC, y los reportes agregan con `AT TIME ZONE 'America/Argentina/Buenos_Aires'`
- * justamente para que la caja cierre. Si al modelo se le dijera el día UTC, entre las
- * 21:00 y las 24:00 locales consultaría un día que todavía no pasó para el negocio:
- * el mismo error de fecha que este arreglo vino a resolver, con otro disfraz.
- */
-export function fechaDelNegocio(ahora: Date = new Date()): string {
-  // `en-CA` formatea como YYYY-MM-DD, que es el formato que piden las herramientas.
-  return new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_NEGOCIO }).format(ahora)
 }
 
 /**
