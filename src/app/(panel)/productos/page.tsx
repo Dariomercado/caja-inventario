@@ -1,5 +1,5 @@
-import { prisma } from '@/lib/db'
 import { formatearCentavos } from '@/lib/dinero'
+import { listarProductosActivos } from '@/server/productos'
 
 // El stock cambia con cada venta y la ruta ya es dinámica porque el layout llama a
 // cookies() en el guard de sesión.
@@ -7,10 +7,9 @@ import { formatearCentavos } from '@/lib/dinero'
 const UMBRAL_STOCK_BAJO = 5
 
 export default async function PaginaProductos() {
-  const productos = await prisma.producto.findMany({
-    where: { activo: true },
-    orderBy: { nombre: 'asc' },
-  })
+  // La consulta vive en el servicio, no acá: la API lista el mismo catálogo y dos
+  // copias divergen en cuanto una de las dos agrega un filtro.
+  const productos = await listarProductosActivos()
 
   const stockBajo = productos.filter((p) => p.stock <= UMBRAL_STOCK_BAJO)
 

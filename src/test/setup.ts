@@ -9,6 +9,6 @@ assertTestDatabase()
 // contador de `Venta.numero` se arrastre de un test a otro.
 beforeEach(async () => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "LineaVenta", "Pago", "MovimientoStock", "Venta", "Producto", "Usuario" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "LineaVenta", "Pago", "MovimientoStock", "Venta", "Producto", "UsoTokenApi", "TokenApi", "Usuario" RESTART IDENTITY CASCADE',
   )
 })

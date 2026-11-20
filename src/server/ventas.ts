@@ -1,4 +1,5 @@
 import { prisma } from '../lib/db'
+import { ProductoInactivoError, ProductoNoEncontradoError } from './erroresDominio'
 
 export class StockInsuficienteError extends Error {
   constructor(
@@ -53,6 +54,12 @@ export type VentaRegistrada = {
   id: string
   numero: number
   totalCentavos: number
+  /**
+   * `false` cuando esta llamada creó la venta; `true` cuando devolvió una que ya
+   * existía con la misma clave de idempotencia. La UI lo ignora; la API lo usa para
+   * responder 201 o 200 sin inventar una segunda consulta.
+   */
+  reutilizada: boolean
 }
 
 type ProductoBloqueado = {
@@ -107,7 +114,12 @@ export async function registrarVenta(input: RegistrarVentaInput): Promise<VentaR
     if (previa.usuarioId !== input.usuarioId || pedido !== guardado) {
       throw new ClaveIdempotenciaReutilizadaError(claveIdempotencia)
     }
-    return { id: previa.id, numero: previa.numero, totalCentavos: previa.totalCentavos }
+    return {
+      id: previa.id,
+      numero: previa.numero,
+      totalCentavos: previa.totalCentavos,
+      reutilizada: true,
+    }
   }
 }
 
@@ -169,10 +181,12 @@ async function ventaEnTransaccion(input: RegistrarVentaInput): Promise<VentaRegi
       `
       const producto = filas[0]
       if (!producto) {
-        throw new Error(`El producto ${id} no existe`)
+        // Errores tipados y no `Error` genérico: la capa HTTP necesita distinguir
+        // un dato inválido del cliente (404/409) de un defecto del servidor (500).
+        throw new ProductoNoEncontradoError(id)
       }
       if (!producto.activo) {
-        throw new Error(`El producto ${producto.nombre} está inactivo`)
+        throw new ProductoInactivoError(producto.nombre)
       }
       bloqueados.set(id, producto)
     }
@@ -251,6 +265,7 @@ async function ventaEnTransaccion(input: RegistrarVentaInput): Promise<VentaRegi
       id: venta.id,
       numero: venta.numero,
       totalCentavos: venta.totalCentavos,
+      reutilizada: false,
     }
   })
 }
