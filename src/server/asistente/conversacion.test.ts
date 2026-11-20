@@ -22,6 +22,15 @@ describe('conversación del asistente', () => {
     expect(mensajes[0]?.content).toContain('Hoy es 2026-11-20.')
   })
 
+  it('avisa que la API habla UTC y que hay que mostrarlo en hora de Buenos Aires', () => {
+    const sistema = mensajesParaElModelo([], 'hola')[0]?.content ?? ''
+
+    // Sin esta línea el modelo muestra `creadaEn` tal cual, que es UTC: una venta de
+    // las 23:30 locales aparece como el día siguiente a las 02:30.
+    expect(sistema).toContain('UTC')
+    expect(sistema).toContain('Buenos Aires')
+  })
+
   it('usa el día de Buenos Aires, no el UTC, porque así agregan los reportes', () => {
     // 02:00 UTC del 20 es 23:00 del 19 en Buenos Aires: la venta de esa hora es del
     // día 19 para el negocio, y `AT TIME ZONE` la cuenta ahí. Si el modelo recibiera
