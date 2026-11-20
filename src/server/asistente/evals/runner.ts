@@ -79,11 +79,19 @@ export type ResultadoCaso = {
   failures: string[]
   /** Fragments from `informative`: what the reply said, never a criterion (S9). */
   informative: string[]
+  /** What the panel would show of this run: the reply and the calls behind it (S10). */
+  transcripcion: TranscripcionDeCaso
   toolCalls: string[]
   inputTokens: number
   outputTokens: number
   latencyMs: number
 }
+
+/** Una llamada de herramienta, como la mostraría el panel del asistente. */
+export type LlamadaTranscrita = { nombre: string; estado: 'ok' | 'error'; detalle: string }
+
+/** El turno del asistente de una corrida: su texto final y las herramientas que ejecutó. */
+export type TranscripcionDeCaso = { texto: string; llamadas: LlamadaTranscrita[] }
 
 /**
  * Everything a case declared, measured against what actually happened.
@@ -678,6 +686,7 @@ export async function correrCaso(caso: CasoEval, fabrica: FabricaDeModelo): Prom
       skipped: true,
       failures: [],
       informative: [],
+      transcripcion: { texto: '', llamadas: [] },
       toolCalls: [],
       inputTokens: 0,
       outputTokens: 0,
@@ -704,6 +713,18 @@ export async function correrCaso(caso: CasoEval, fabrica: FabricaDeModelo): Prom
     skipped: false,
     failures: fallas,
     informative: observarTextoInformativo(caso.informative, observacion.text),
+    transcripcion: {
+      texto: ejecucion.texto,
+      llamadas: ejecucion.llamadas.map((llamada) =>
+        llamada.resultado.ok
+          ? { nombre: llamada.nombre, estado: 'ok' as const, detalle: '' }
+          : {
+              nombre: llamada.nombre,
+              estado: 'error' as const,
+              detalle: `${llamada.resultado.error.code}: ${llamada.resultado.error.message}`,
+            },
+      ),
+    },
     toolCalls: ejecucion.llamadas.map((llamada) => llamada.nombre),
     inputTokens: ejecucion.entrada,
     outputTokens: ejecucion.salida,

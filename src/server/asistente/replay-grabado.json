@@ -1,0 +1,28 @@
+{
+  "caso": "simple sale",
+  "pedido": "Vendé 2 de azúcar común de 1 kg, pagadas en efectivo.",
+  "fecha": "2026-11-20",
+  "modelo": "glm5.3-flash",
+  "turnos": [
+    {
+      "rol": "usuario",
+      "texto": "Vendé 2 de azúcar común de 1 kg, pagadas en efectivo."
+    },
+    {
+      "rol": "asistente",
+      "texto": "Venta registrada: N° 1, total $3.000,00, efectivo.",
+      "llamadas": [
+        {
+          "nombre": "listar_productos",
+          "estado": "ok",
+          "detalle": ""
+        },
+        {
+          "nombre": "registrar_venta",
+          "estado": "ok",
+          "detalle": ""
+        }
+      ]
+    }
+  ]
+}

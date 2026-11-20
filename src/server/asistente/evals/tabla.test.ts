@@ -22,6 +22,8 @@ function resultado(nombre: string, cambios: Partial<ResultadoCaso> = {}): Result
     outputTokens: 50,
     latencyMs: 120,
     ...cambios,
+    // Después del spread, para que el campo obligatorio no quede `| undefined`.
+    transcripcion: cambios.transcripcion ?? { texto: '', llamadas: [] },
   }
 }
 

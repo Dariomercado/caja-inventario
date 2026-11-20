@@ -29,10 +29,12 @@
 //   DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm run evals -- --live --grabar
 //
 // `--grabar` records the live run into `evals/fixtures/<case>.json`, in the same format
-// the offline tier loads, and then re-runs the offline tier from what it wrote. It
-// requires `--live`, and a case whose live run failed never replaces its fixture: the
-// hand-authored baseline is what makes the suite runnable, so a capture that does not
-// reproduce an effect is reported, not adopted.
+// the offline tier loads, and then re-runs the offline tier from what it wrote. It also
+// rewrites `src/server/asistente/replay-grabado.json`, the recorded exchange the panel
+// serves in replay mode, from case `01-simple-sale`'s live result. It requires `--live`,
+// and a case whose live run failed never replaces its fixture: the hand-authored
+// baseline is what makes the suite runnable, so a capture that does not reproduce an
+// effect is reported, not adopted.
 //
 // The live tier reads `ASISTENTE_MODELO_API_KEY` (and optionally
 // `ASISTENTE_MODELO` / `ASISTENTE_MODELO_BASE_URL`) from the environment or, if the
@@ -86,6 +88,8 @@ try {
 }
 
 const {
+  CASO_DEL_REPLAY,
+  componerReplayGrabado,
   correrCaso,
   configuracionLiveDesdeEntorno,
   decidirGrabado,
@@ -142,6 +146,10 @@ async function correrTier(nivel, fabricaDe) {
           ok: resultado.ok,
           skipped: resultado.skipped,
           intentos: cargado.caso.request.attempts,
+          // The replay panel is composed from the same run, so the transcript and the
+          // case travel with the capture instead of being re-derived later.
+          caso: cargado.caso,
+          transcripcion: resultado.transcripcion,
         })
       }
     } catch (error) {
@@ -153,6 +161,7 @@ async function correrTier(nivel, fabricaDe) {
         skipped: false,
         failures: [`la ejecución falló: ${error instanceof Error ? error.message : String(error)}`],
         informative: [],
+        transcripcion: { texto: '', llamadas: [] },
         toolCalls: [],
         inputTokens: 0,
         outputTokens: 0,
@@ -179,6 +188,7 @@ async function correrOfflineDesdeArchivos() {
         skipped: false,
         failures: [`la ejecución falló: ${error instanceof Error ? error.message : String(error)}`],
         informative: [],
+        transcripcion: { texto: '', llamadas: [] },
         toolCalls: [],
         inputTokens: 0,
         outputTokens: 0,
@@ -235,6 +245,34 @@ if (modoGrabar && live.capturas.length > 0) {
 
   const fixturePorNombre = new Map(casos.map(({ caso }) => [caso.name, caso.fixture]))
   const restauradas = []
+
+  // El panel del modo replay se arma con el mismo constructor, desde el resultado del
+  // caso 01 en vivo. Si ese caso no corrió, falló, o la captura no alcanza para fecharlo,
+  // el archivo anterior queda como está: una grabación sin fecha sería una respuesta
+  // fija disfrazada de corrida.
+  const delReplay = live.capturas.find(({ file }) => file === CASO_DEL_REPLAY)
+  const rutaReplay = resolve(RAIZ, 'src/server/asistente/replay-grabado.json')
+
+  if (!delReplay) {
+    console.log(`[grabar] replay-grabado.json sin cambios: ${CASO_DEL_REPLAY} no corrió en el nivel live.`)
+  } else if (!delReplay.ok) {
+    console.log(`[grabar] replay-grabado.json sin cambios: ${CASO_DEL_REPLAY} falló en vivo.`)
+  } else {
+    const grabado = componerReplayGrabado({
+      caso: delReplay.caso,
+      transcripcion: delReplay.transcripcion,
+      captura: delReplay.captura,
+    })
+
+    if (!grabado) {
+      console.log('[grabar] replay-grabado.json sin cambios: la captura no alcanza para armar la corrida grabada.')
+    } else {
+      writeFileSync(rutaReplay, `${JSON.stringify(grabado, null, 2)}\n`)
+      console.log(
+        `[grabar] replay-grabado.json actualizado desde ${CASO_DEL_REPLAY} (${grabado.fecha}, ${grabado.modelo}).`,
+      )
+    }
+  }
 
   offlineFinal = await correrOfflineDesdeArchivos()
 

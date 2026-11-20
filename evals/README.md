@@ -123,6 +123,13 @@ lo único que corre cuando no hay proveedor, así que:
 No se debilita ninguna aserción para que una captura pase: si una captura real no
 reproduce un efecto, eso es un hallazgo para el reporte, no algo que se edita.
 
+Además de los fixtures, `--grabar` reescribe
+`src/server/asistente/replay-grabado.json`: la corrida grabada que el panel muestra en
+modo replay cuando se agota el presupuesto diario o falta configuración (S10, S13). Sale
+del resultado live del caso `01-simple-sale`, con su fecha y su id de modelo, y si ese
+caso no corrió, falló o la captura no se puede fechar, el archivo anterior queda como
+está y la corrida lo dice.
+
 La base tiene que terminar en `_test`: el corredor trunca tablas entre casos y se
 niega a tocar cualquier otra (misma regla que `src/test/guard.ts`). Sólo escribe su
 propia semilla: un usuario, un token con scopes acotados y los productos del caso.
