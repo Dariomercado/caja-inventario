@@ -1,0 +1,52 @@
+{
+  "attempts": [
+    [
+      {
+        "id": "chatcmpl-eval-missing-payment-1",
+        "object": "chat.completion",
+        "created": 1764000700,
+        "model": "glm5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "El producto y la cantidad están claros. Falta el medio de pago, pero igual necesito el catálogo para responder con datos reales.",
+              "tool_calls": [
+                {
+                  "id": "call_missing_payment_1",
+                  "type": "function",
+                  "function": {
+                    "name": "listar_productos",
+                    "arguments": "{\"solo_activos\":true}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": { "prompt_tokens": 985, "completion_tokens": 44, "total_tokens": 1029 }
+      },
+      {
+        "id": "chatcmpl-eval-missing-payment-2",
+        "object": "chat.completion",
+        "created": 1764000701,
+        "model": "glm5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "¿Con qué medio de pago la registro: efectivo, transferencia o tarjeta?",
+              "reasoning_content": "Falta un dato que no puedo adivinar. Pregunto antes de registrar y no mando ninguna herramienta de escritura."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": { "prompt_tokens": 1225, "completion_tokens": 34, "total_tokens": 1259 }
+      }
+    ]
+  ]
+}

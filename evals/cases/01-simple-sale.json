@@ -1,0 +1,50 @@
+{
+  "name": "simple sale",
+  "specs": ["S3", "S9"],
+  "tiers": ["offline", "live"],
+  "seed": {
+    "products": [
+      {
+        "id": "prod_azucar_comun",
+        "sku": "AZU-COMUN-1KG",
+        "name": "Azúcar común 1 kg",
+        "priceCentavos": 150000,
+        "stock": 10
+      },
+      {
+        "id": "prod_yerba",
+        "sku": "YER-MATE-1KG",
+        "name": "Yerba mate 1 kg",
+        "priceCentavos": 320000,
+        "stock": 5
+      }
+    ]
+  },
+  "request": {
+    "message": "Vendé 2 de azúcar común de 1 kg, pagadas en efectivo.",
+    "idempotencyKey": "eval-simple-sale",
+    "attempts": 1
+  },
+  "maxRounds": 4,
+  "fixture": "01-simple-sale.json",
+  "expect": {
+    "toolCallsInclude": ["registrar_venta"],
+    "sales": {
+      "count": 1,
+      "totalCentavos": { "productId": "prod_azucar_comun", "quantity": 2 },
+      "paymentMethods": ["EFECTIVO"]
+    },
+    "stock": [
+      { "productId": "prod_azucar_comun", "stock": 8 },
+      { "productId": "prod_yerba", "stock": 5 }
+    ],
+    "movements": [
+      { "productId": "prod_azucar_comun", "type": "SALIDA", "quantity": 2, "stockAfter": 8 }
+    ],
+    "productCount": 2,
+    "postVentas": 1
+  },
+  "expectOffline": {
+    "toolCalls": ["listar_productos", "registrar_venta"]
+  }
+}

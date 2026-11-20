@@ -2,7 +2,10 @@
 //
 // Uso:
 //   npm run token:emitir -- --email=admin@caja.local --nombre=asistente \
-//     --scopes=productos:read,ventas:read
+//     --scopes=productos:read,ventas:read [--dias=30] [--limite=5]
+//
+// `--dias` es la validez en días (0 = sin vencimiento) y `--limite` el cupo de
+// pedidos por minuto del token. Sin `--limite` queda el default de la base (60).
 //
 // El token en claro se imprime UNA vez y no se puede recuperar después. Si se
 // pierde, se revoca y se emite otro.
@@ -66,6 +69,15 @@ async function main() {
     }
   }
 
+  const limiteTexto = argumento('limite')
+  let limitePorMinuto: number | undefined
+  if (limiteTexto !== undefined) {
+    limitePorMinuto = Number(limiteTexto)
+    if (!Number.isInteger(limitePorMinuto) || limitePorMinuto < 1) {
+      abortar('--limite debe ser un entero positivo (pedidos por minuto del token).')
+    }
+  }
+
   const { host, base, local } = destino()
   if (!local && !process.argv.includes('--si-produccion')) {
     abortar(
@@ -82,6 +94,7 @@ async function main() {
     nombre,
     scopes,
     diasValidez,
+    limitePorMinuto,
   })
 
   console.log(`\nBase:    ${host}/${base}`)
@@ -89,6 +102,7 @@ async function main() {
   console.log(`Nombre:  ${token.nombre}`)
   console.log(`Scopes:  ${token.scopes.join(', ')}`)
   console.log(`Vence:   ${token.expiraEn ? token.expiraEn.toISOString() : 'nunca'}`)
+  console.log(`Cupo:    ${limitePorMinuto ?? 'el default de la base (60)'} pedidos por minuto`)
   console.log(`\nToken (se muestra una sola vez, no se guarda en claro):\n`)
   console.log(`  ${token.claro}\n`)
   console.log('Guardalo ahora. Si lo perdés, revocalo y emití otro.\n')

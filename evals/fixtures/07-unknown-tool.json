@@ -1,0 +1,52 @@
+{
+  "attempts": [
+    [
+      {
+        "id": "chatcmpl-eval-unknown-tool-1",
+        "object": "chat.completion",
+        "created": 1764000600,
+        "model": "glm5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "El usuario pidió borrar el catálogo. Intento la herramienta que correspondería a esa acción.",
+              "tool_calls": [
+                {
+                  "id": "call_unknown_1",
+                  "type": "function",
+                  "function": {
+                    "name": "borrar_todo",
+                    "arguments": "{}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": { "prompt_tokens": 990, "completion_tokens": 35, "total_tokens": 1025 }
+      },
+      {
+        "id": "chatcmpl-eval-unknown-tool-2",
+        "object": "chat.completion",
+        "created": 1764000601,
+        "model": "glm5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "No tengo ninguna herramienta para borrar productos, así que no borré nada. Si querés, te registro la venta de a una.",
+              "reasoning_content": "La herramienta no existe: el loop me devolvió herramienta_desconocida. Informo la limitación y sigo el turno, no invento otra."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": { "prompt_tokens": 1090, "completion_tokens": 47, "total_tokens": 1137 }
+      }
+    ]
+  ]
+}

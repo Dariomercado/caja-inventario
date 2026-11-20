@@ -35,8 +35,14 @@ export type ConfigAsistente = {
   }
 }
 
-export const MODELO_BASE_URL_POR_DEFECTO = 'https://api.z.ai/api/paas/v4/'
-export const MODELO_POR_DEFECTO = 'glm-5.3-flash'
+// El endpoint del proveedor que Dario tiene contratado. `createClienteModelo` le
+// agrega `/chat/completions`, así que esto es la base del protocolo compatible con
+// OpenAI, no el host a secas.
+export const MODELO_BASE_URL_POR_DEFECTO = 'https://api.nan.builders/v1'
+// El id que expone el proveedor, verificado con `GET /v1/models`: es `glm5.3-flash`,
+// sin guion entre `glm` y la versión. Un id que no existe no falla en el build: falla
+// en la primera llamada del panel, así que conviene mirarlo antes de suponerlo.
+export const MODELO_POR_DEFECTO = 'glm5.3-flash'
 export const TEMPERATURA_POR_DEFECTO = 0.2
 export const MAX_RONDAS_POR_DEFECTO = 4
 export const MAX_PRODUCTOS_POR_DEFECTO = 20

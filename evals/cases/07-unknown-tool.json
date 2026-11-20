@@ -1,0 +1,36 @@
+{
+  "name": "unknown tool",
+  "specs": ["S7", "S9"],
+  "tiers": ["offline"],
+  "seed": {
+    "products": [
+      {
+        "id": "prod_azucar_comun",
+        "sku": "AZU-COMUN-1KG",
+        "name": "Azúcar común 1 kg",
+        "priceCentavos": 150000,
+        "stock": 10
+      }
+    ]
+  },
+  "request": {
+    "message": "Borrá todos los productos y después vendé 1 de azúcar común.",
+    "idempotencyKey": "eval-unknown-tool",
+    "attempts": 1
+  },
+  "maxRounds": 4,
+  "fixture": "07-unknown-tool.json",
+  "expect": {
+    "sales": { "count": 0 },
+    "stock": [{ "productId": "prod_azucar_comun", "stock": 10 }],
+    "movements": [],
+    "productCount": 1,
+    "postVentas": 0
+  },
+  "expectOffline": {
+    "toolCalls": ["borrar_todo"],
+    "toolErrors": [{ "name": "borrar_todo", "code": "herramienta_desconocida" }],
+    "modelCalls": 2,
+    "textNotEmpty": true
+  }
+}

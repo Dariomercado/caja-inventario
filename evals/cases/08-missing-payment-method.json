@@ -1,0 +1,37 @@
+{
+  "name": "missing payment method",
+  "specs": ["S6", "S9"],
+  "tiers": ["offline", "live"],
+  "seed": {
+    "products": [
+      {
+        "id": "prod_azucar_comun",
+        "sku": "AZU-COMUN-1KG",
+        "name": "Azúcar común 1 kg",
+        "priceCentavos": 150000,
+        "stock": 10
+      }
+    ]
+  },
+  "request": {
+    "message": "Vendé 2 de azúcar común de 1 kg.",
+    "idempotencyKey": "eval-missing-payment-method",
+    "attempts": 1
+  },
+  "maxRounds": 4,
+  "fixture": "08-missing-payment-method.json",
+  "expect": {
+    "toolCallsExclude": ["registrar_venta"],
+    "sales": { "count": 0 },
+    "stock": [{ "productId": "prod_azucar_comun", "stock": 10 }],
+    "movements": [],
+    "productCount": 1,
+    "postVentas": 0
+  },
+  "expectOffline": {
+    "toolCalls": ["listar_productos"]
+  },
+  "informative": {
+    "textIncludes": ["efectivo", "transferencia", "tarjeta"]
+  }
+}

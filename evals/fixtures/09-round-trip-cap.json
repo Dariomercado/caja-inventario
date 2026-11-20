@@ -1,0 +1,90 @@
+{
+  "attempts": [
+    [
+      {
+        "id": "chatcmpl-eval-round-trip-cap-1",
+        "object": "chat.completion",
+        "created": 1764000800,
+        "model": "glm5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "Consulto el catálogo para responder el stock.",
+              "tool_calls": [
+                {
+                  "id": "call_cap_1",
+                  "type": "function",
+                  "function": {
+                    "name": "listar_productos",
+                    "arguments": "{\"solo_activos\":true}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": { "prompt_tokens": 970, "completion_tokens": 32, "total_tokens": 1002 }
+      },
+      {
+        "id": "chatcmpl-eval-round-trip-cap-2",
+        "object": "chat.completion",
+        "created": 1764000801,
+        "model": "glm5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "Quiero volver a confirmar el stock antes de responder.",
+              "tool_calls": [
+                {
+                  "id": "call_cap_2",
+                  "type": "function",
+                  "function": {
+                    "name": "listar_productos",
+                    "arguments": "{\"solo_activos\":true}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": { "prompt_tokens": 1180, "completion_tokens": 30, "total_tokens": 1210 }
+      },
+      {
+        "id": "chatcmpl-eval-round-trip-cap-3",
+        "object": "chat.completion",
+        "created": 1764000802,
+        "model": "glm5.3-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "Sin herramientas disponibles, el modelo insiste igual. El loop no la ejecuta y corta el turno en el tope.",
+              "tool_calls": [
+                {
+                  "id": "call_cap_3",
+                  "type": "function",
+                  "function": {
+                    "name": "listar_productos",
+                    "arguments": "{\"solo_activos\":true}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": { "prompt_tokens": 1390, "completion_tokens": 31, "total_tokens": 1421 }
+      }
+    ]
+  ]
+}

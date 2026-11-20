@@ -1,0 +1,47 @@
+{
+  "name": "ambiguous product",
+  "specs": ["S6", "S9"],
+  "tiers": ["offline", "live"],
+  "seed": {
+    "products": [
+      {
+        "id": "prod_azucar_comun",
+        "sku": "AZU-COMUN-1KG",
+        "name": "Azúcar común 1 kg",
+        "priceCentavos": 150000,
+        "stock": 10
+      },
+      {
+        "id": "prod_azucar_light",
+        "sku": "AZU-LIGHT-1KG",
+        "name": "Azúcar light 1 kg",
+        "priceCentavos": 180000,
+        "stock": 10
+      }
+    ]
+  },
+  "request": {
+    "message": "Vendé 2 azúcares, por favor.",
+    "idempotencyKey": "eval-ambiguous-product",
+    "attempts": 1
+  },
+  "maxRounds": 4,
+  "fixture": "02-ambiguous-product.json",
+  "expect": {
+    "toolCallsExclude": ["registrar_venta"],
+    "sales": { "count": 0 },
+    "stock": [
+      { "productId": "prod_azucar_comun", "stock": 10 },
+      { "productId": "prod_azucar_light", "stock": 10 }
+    ],
+    "movements": [],
+    "productCount": 2,
+    "postVentas": 0
+  },
+  "expectOffline": {
+    "toolCalls": ["listar_productos"]
+  },
+  "informative": {
+    "textIncludes": ["Azúcar común 1 kg", "Azúcar light 1 kg"]
+  }
+}
