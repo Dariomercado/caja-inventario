@@ -528,7 +528,7 @@ el día.
 # offline: fixtures + transporte en proceso. Sin red, sin costo, sin secretos.
 DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm run evals
 
-# live: los mismos casos contra GLM. Necesita ASISTENTE_MODELO_API_KEY.
+# live: los mismos casos contra el modelo real. La clave sale del entorno o de .env.
 npm run evals -- --live
 ```
 

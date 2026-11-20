@@ -19,12 +19,34 @@
 //
 // Usage:
 //   DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm run evals
-//   npm run evals -- --live
+//   DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm run evals -- --live
+//
+// The live tier reads `ASISTENTE_MODELO_API_KEY` (and optionally
+// `ASISTENTE_MODELO` / `ASISTENTE_MODELO_BASE_URL`) from the environment or, if the
+// variable is not set, from `.env`.
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const modoLive = process.argv.slice(2).includes('--live')
+
+// The live tier needs the provider key, and the only safe place for it on a
+// development machine is `.env` — which is human-controlled and never echoed.
+// Loading it here, inside this process, is what lets the live run work without
+// exporting a secret in a shell.
+//
+// `dotenv` never overrides a variable that is already set, so an inline
+// `DATABASE_URL` still wins and the `_test` guard below keeps its full meaning: if
+// nobody passes one, dotenv fills in the development URL and the guard aborts.
+if (modoLive) {
+  try {
+    const { config } = await import('dotenv')
+    config({ path: resolve(RAIZ, '.env'), quiet: true })
+  } catch {
+    // dotenv is a dev dependency: without it the live tier just needs the variables
+    // exported the usual way.
+  }
+}
 
 function morir(mensaje) {
   console.error(`\n[evals] ${mensaje}\n`)
