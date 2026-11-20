@@ -56,7 +56,9 @@ export const esquemaListadoVentas = z.object({
   limite: z.coerce.number().int().min(1).max(100).optional(),
 })
 
-const MEDIOS_DE_PAGO = ['EFECTIVO', 'TRANSFERENCIA', 'TARJETA'] as const
+// Los tres medios viven en un solo lugar: la API los traduce a su enum de Prisma y
+// el asistente a los argumentos de su herramienta.
+export const MEDIOS_DE_PAGO = ['EFECTIVO', 'TRANSFERENCIA', 'TARJETA'] as const
 
 export const esquemaNuevaVenta = z
   .object({
