@@ -97,7 +97,13 @@ evidencia que mostrar.
   Evidencia: build con `/asistente` como ruta dinámica, 5 tests de la conversación.
 - **T4 — Token y emisión para el asistente.** Token con los cuatro scopes, emitido y
   guardado como variable de entorno, sin ampliar scopes a mano por conveniencia.
-  Specs: S4.
+  Specs: S4. Hecho: `--limite` en `scripts/emitir-token.ts`, validado con la misma forma
+  que `--dias` y `--scopes` (entero positivo; un valor inválido aborta **antes** de tocar
+  la base) y pasado a `emitirToken`. `TokenApi.limitePorMinuto` ya existía con default 60
+  y `emitirToken` ya aceptaba el parámetro: lo que faltaba era la puerta de la terminal,
+  sin la cual un token del asistente nacía con 60/min. Evidencia: token emitido contra la
+  base local `caja` con los cuatro scopes, `--dias=0` y `--limite=5`, leído de vuelta con
+  SQL (`limitePorMinuto = 5`).
 - **T5 — Casos de eval, nivel offline.** Los casos y sus fixtures: elección de tool,
   precisión de argumentos, ambigüedad, dinero, stock, reenvío, inyección, herramienta
   inexistente. Specs: S6, S9, S12.
@@ -113,9 +119,16 @@ evidencia que mostrar.
   formato de fixture. Evidencia: 6 tests del contador, 2 del loop (no llama al modelo
   sin presupuesto), migración aplicada en `caja` y `caja_test`.
 - **T8 — CI.** El nivel offline corre en cada push y PR sin secret; el live se saltea
-  con un mensaje explícito cuando la clave no está. Specs: S8.
+  con un mensaje explícito cuando la clave no está. Specs: S8. Hecho: step `Evals offline
+  del asistente` (`npm run evals`) en el job `checks`, después de los tests de servicios y
+  sobre el mismo `caja_test` del job; sin `ASISTENTE_*`, sin secretos y sin nivel live.
+  Evidencia: YAML parseado con `js-yaml`; lo que no se pudo verificar está en L11.
 - **T9 — Documentación.** README: qué hace el asistente, cómo se corren las evals, qué
-  mide cada caso, y por qué los topes son esos. Specs: S14.
+  mide cada caso, y por qué los topes son esos. Specs: S14. Hecho: sección «Asistente de
+  inventario y sus evals» con la pantalla y el token propio (S4), la tabla de topes con su
+  razón, la emisión del token con `--limite=5`, los dos niveles, la tabla de los nueve
+  casos y la nota de que los fixtures son escritos a mano. «Estado» y la tabla de CI pasan
+  a 214 tests, el número que devuelve la suite hoy.
 
 ## Log
 
@@ -266,3 +279,33 @@ replay, y mostrarlo antes de que exista el contador sería un cartel sin leyenda
 9. **Sigue pendiente de T6/T3:** servir la corrida grabada cuando el presupuesto se
    agota. El formato de fixture ya existe; lo que falta es que la acción reproduzca
    esa corrida en modo replay.
+
+**L11 — T4, T8 y T9 cierran la etapa.**
+
+1. **`--limite` es una opción del script, no del esquema.** `TokenApi.limitePorMinuto`
+   ya existía con default 60 y `emitirToken` ya aceptaba el parámetro: lo único que
+   faltaba era la puerta de la terminal, y sin ella un token del asistente nacía con
+   60/min. Agregar una columna o tocar `tokens.ts` habría sido resolver un problema
+   que el contrato ya tenía resuelto.
+2. **La validación aborta antes de mirar la base.** Igual que `--dias` y `--scopes`:
+   el número se valida al parsear los argumentos, así que un `--limite=0` o
+   `--limite=abc` falla con un mensaje y no deja una fila a medio emitir. El script
+   sigue sin aceptar la forma `--flag valor` separada por espacio; los ejemplos usan
+   `=` porque es lo que el parser ya entiende.
+3. **El step de CI va después de `npm test`, no antes.** Las evals truncan tablas entre
+   casos y comparten el `caja_test` del job: el orden deja a los tests de servicios con
+   la base limpia y a las evals con las migraciones ya aplicadas. No agrega ninguna
+   variable: el nivel offline usa fixtures y transporte en proceso, así que no necesita
+   `ASISTENTE_*` ni secretos. Si alguna vez los necesitara, el diseño estaría mal.
+4. **La tabla del README nombra los casos por archivo** (`01-simple-sale`), no por su
+   `name` interno: el nombre del JSON puede cambiar con el caso, el archivo es el ancla
+   estable para quien quiere leerlo.
+5. **El «Estado» del README estaba en 66 tests y la tabla de CI en 159.** Los dos pasan
+   al número que devuelve la suite hoy, 214, más los 9 casos de eval offline.
+6. **Evidencia:** suite **214/214**, `tsc` 0 errores, `eslint` 0 errores, `npm run evals`
+   **9/9** y salida 0, token local con `limitePorMinuto = 5` leído con SQL, y el workflow
+   parseado como YAML válido.
+7. **Lo que no se pudo verificar acá:** la corrida real de GitHub Actions. Se validó el
+   YAML y la estructura (el step existe en `checks`, después de los tests, sin `env`, sin
+   referencias a secretos, con `POSTGRES_DB: caja_test` y sin `--live`), pero el runner no
+   corre en esta máquina: la primera prueba de verdad es el push de la rama.
