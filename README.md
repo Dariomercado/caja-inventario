@@ -510,8 +510,17 @@ ASISTENTE_API_URL=http://localhost:3000   # origen de esta app; el cliente le ag
 ASISTENTE_API_TOKEN=cji_…                 # el que imprimió el comando de arriba
 ASISTENTE_MODELO_API_KEY=…                # la clave del proveedor
 ASISTENTE_MODELO=glm-5.3-flash            # opcional: es el default
-ASISTENTE_MODELO_BASE_URL=…               # opcional: endpoint compatible con OpenAI
+ASISTENTE_MODELO_BASE_URL=…               # opcional: https://api.nan.builders/v1 por defecto
 ```
+
+**Una sola clave para todo.** NaN Cloud emite una clave por cuenta —«one key for every
+tool and agent that uses NaN inference»— y la única acción del panel es rotarla, que
+deshabilita la anterior. Consecuencia práctica: la misma clave que usa el harness de
+agente en la máquina es la que va en el entorno del deploy, así que **rotarla corta las
+dos cosas a la vez** y filtrarla desde la app compromete también al agente. Por eso el
+asistente la usa únicamente del lado del servidor (la Server Action nunca la manda al
+navegador) y los topes de la sección anterior acotan el daño: un bucle no puede gastar
+el día.
 
 ### Las evals: dos niveles, los mismos casos
 

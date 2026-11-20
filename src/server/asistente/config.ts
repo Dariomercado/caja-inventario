@@ -35,7 +35,10 @@ export type ConfigAsistente = {
   }
 }
 
-export const MODELO_BASE_URL_POR_DEFECTO = 'https://api.z.ai/api/paas/v4/'
+// El endpoint del proveedor que Dario tiene contratado. `createClienteModelo` le
+// agrega `/chat/completions`, así que esto es la base del protocolo compatible con
+// OpenAI, no el host a secas.
+export const MODELO_BASE_URL_POR_DEFECTO = 'https://api.nan.builders/v1'
 export const MODELO_POR_DEFECTO = 'glm-5.3-flash'
 export const TEMPERATURA_POR_DEFECTO = 0.2
 export const MAX_RONDAS_POR_DEFECTO = 4
