@@ -34,11 +34,25 @@ export const esquemaEditarProducto = z
     message: 'hay que enviar al menos un campo para modificar',
   })
 
-export const esquemaAjusteStock = z.object({
-  tipo: z.enum(['ENTRADA', 'SALIDA', 'AJUSTE']),
-  cantidad: z.number().int().min(0),
-  motivo: z.string().min(1).max(200).optional(),
-})
+export const esquemaAjusteStock = z
+  .object({
+    tipo: z.enum(['ENTRADA', 'SALIDA', 'AJUSTE']),
+    cantidad: z.number().int().min(0),
+    motivo: z.string().min(1).max(200).optional(),
+  })
+  .superRefine((ajuste, ctx) => {
+    // Un movimiento de 0 no mueve nada, y `MovimientoStock.cantidad` es siempre
+    // positiva por contrato. AJUSTE sí acepta 0: fijar el stock en cero es una
+    // operación real. Antes esto llegaba al servicio, que tiraba un Error genérico y
+    // salía como 500: un error del cliente reportado como defecto del servidor.
+    if (ajuste.tipo !== 'AJUSTE' && ajuste.cantidad === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['cantidad'],
+        message: `una ${ajuste.tipo.toLowerCase()} necesita una cantidad mayor a 0`,
+      })
+    }
+  })
 
 export const esquemaListado = z.object({
   cursor: z.string().min(1).optional(),
