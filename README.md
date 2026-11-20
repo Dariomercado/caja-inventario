@@ -259,6 +259,14 @@ registra la venta.
 Lectura y escritura son scopes distintos: un token de sólo lectura nunca puede crear un
 producto ni mover stock. Por eso los ejemplos de abajo usan dos tokens.
 
+**El alcance de un token es la tienda, no el usuario.** El esquema no tiene noción de
+negocio —`Producto` y `Usuario` no cuelgan de nada— así que es una sola tienda: un token lee
+el catálogo y las ventas de todos, y las escrituras quedan atribuidas al usuario dueño del
+token. Los reportes son la caja del negocio, no la de una persona. Está dicho en la
+descripción del documento OpenAPI y clavado por un test (`src/app/api/v1/alcance.test.ts`):
+el día que haya varias tiendas, ese test falla primero y obliga a decidir el filtro a
+conciencia.
+
 Los listados paginan por cursor y aceptan `limite` de 1 a 100 (20 por defecto): devuelven
 `siguienteCursor`, o `null` en la última página. Nunca devuelven la tabla entera.
 
@@ -530,6 +538,10 @@ DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm
 
 # live: los mismos casos contra el modelo real. La clave sale del entorno o de .env.
 npm run evals -- --live
+
+# regrabar los fixtures con una corrida real: sólo pisa los casos que pasaron y
+# reproduce el resultado contra lo grabado antes de darlo por bueno.
+npm run evals -- --live --grabar
 ```
 
 El nivel **offline** reproduce respuestas del modelo grabadas como fixtures y llama a los
@@ -570,9 +582,18 @@ En la tabla del corredor, un caso que no declara el nivel que se está corriendo
 `skip` con sus celdas en `-`, y el total cuenta sólo los casos que corrieron: `TOTAL (6 cases,
 6 pass, 0 fail, 3 skipped)` en el live.
 
-Los fixtures de `evals/fixtures/` están **escritos a mano**, no capturados de una corrida
-real: prueban el harness —elección de tool, argumentos, topes, idempotencia, efectos— y no el
-modelo. La primera corrida live los reemplaza.
+Los fixtures de `evals/fixtures/` son **capturas reales** del proveedor: seis de los nueve se
+grabaron el 2026-11-20 con `glm5.3-flash` usando `npm run evals -- --live --grabar`, y su
+número de tokens coincide con el de la corrida live, que es la prueba visible de que el
+offline corre el archivo y no una suposición mía. Los otros tres (`04`, `07`, `09`) siguen
+escritos a mano **a propósito**: guionizan comportamientos del harness —el 409 reportado sin
+reintentar, la herramienta inexistente, el tope de rondas— que el modelo real no produce, y
+grabarlos no tendría sentido.
+
+Una captura **nunca reemplaza la base si no reproduce**: si al regrabar un caso falla, el
+corredor conserva el fixture anterior y sale con código 1. Y una captura es una línea de base
+contra la que detectar regresiones, no una descripción del modelo de hoy: eso lo sigue
+midiendo el nivel live.
 
 ## Deploy
 

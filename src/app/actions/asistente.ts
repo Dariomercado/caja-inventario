@@ -7,6 +7,7 @@ import { ConfigIncompletaError, ConfigInvalidaError, configDesde } from '@/serve
 import { esquemaConversacion, mensajesParaElModelo } from '@/server/asistente/conversacion'
 import { crearHerramientas } from '@/server/asistente/herramientas'
 import { crearClienteModelo } from '@/server/asistente/modelo'
+import { cargarReplayGrabado, type LlamadaDelReplay, type ReplayGrabado } from '@/server/asistente/replay'
 import { SinPresupuestoDiarioError, llamadasDelDia, reservadorDeCupo } from '@/server/asistente/uso'
 import { requerirUsuario } from '@/server/sesion'
 
@@ -21,11 +22,7 @@ import { requerirUsuario } from '@/server/sesion'
  * pedido con cuatro rondas gasta cinco llamadas y es lo que se factura (S10).
  */
 
-export type LlamadaVisible = {
-  nombre: string
-  estado: 'ok' | 'error'
-  detalle: string
-}
+export type LlamadaVisible = LlamadaDelReplay
 
 export type RespuestaAsistente =
   | {
@@ -37,7 +34,14 @@ export type RespuestaAsistente =
       usadasHoy: number
       topeDiario: number
     }
-  | { estado: 'replay'; texto: string; usadasHoy: number; topeDiario: number }
+  | {
+      estado: 'replay'
+      texto: string
+      usadasHoy: number
+      topeDiario: number
+      /** La corrida grabada que el panel muestra, o `null` si no hay o está rota. */
+      grabado: ReplayGrabado | null
+    }
   | { estado: 'error'; texto: string }
 
 export async function conversar(entrada: unknown): Promise<RespuestaAsistente> {
@@ -89,13 +93,15 @@ export async function conversar(entrada: unknown): Promise<RespuestaAsistente> {
     }
   } catch (error) {
     if (error instanceof SinPresupuestoDiarioError) {
-      // Modo replay (S10, S13): se dice en pantalla en vez de mostrar un error. La
-      // corrida grabada se sirve desde T6, que es donde existe el formato de fixture.
+      // Modo replay (S10, S13): el panel cambia de estado y sirve la corrida grabada en
+      // vez de aparentar que responde. Si no hay grabación, devuelve el texto de siempre y
+      // el cliente avisa sin inventar un turno del asistente.
       return {
         estado: 'replay',
         texto: `Se agotó el presupuesto diario de ${error.tope} llamadas al modelo. El asistente queda en modo replay hasta el corte de las 00:00 UTC.`,
         usadasHoy: error.usadas,
         topeDiario: error.tope,
+        grabado: cargarReplayGrabado(),
       }
     }
 

@@ -2,20 +2,20 @@
   "attempts": [
     [
       {
-        "id": "chatcmpl-eval-simple-sale-1",
+        "id": "chatcmpl-f0d65e70d07a15d76cfe8e8d3c6b8a85",
         "object": "chat.completion",
-        "created": 1764000000,
+        "created": 1795152704,
         "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
             "message": {
               "role": "assistant",
-              "content": null,
-              "reasoning_content": "El pedido nombra un producto concreto. Listo el catálogo para obtener su id y su stock reales; el total lo va a calcular el servidor.",
+              "content": "",
+              "reasoning_content": "The user wants to sell 2 units of \"azúcar común de 1 kg\" paid in cash. First, I need to identify the product with `listar_productos`. Let me list products to find the azúcar.",
               "tool_calls": [
                 {
-                  "id": "call_simple_sale_1",
+                  "id": "call_7704b7bf8e2e4584838b0bc3",
                   "type": "function",
                   "function": {
                     "name": "listar_productos",
@@ -27,27 +27,37 @@
             "finish_reason": "tool_calls"
           }
         ],
-        "usage": { "prompt_tokens": 980, "completion_tokens": 41, "total_tokens": 1021 }
+        "usage": {
+          "prompt_tokens": 1620,
+          "completion_tokens": 64,
+          "total_tokens": 1684,
+          "completion_tokens_details": {
+            "reasoning_tokens": 47
+          },
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
       },
       {
-        "id": "chatcmpl-eval-simple-sale-2",
+        "id": "chatcmpl-09cdbb0aeb4ea75e137a1aa825bf3b81",
         "object": "chat.completion",
-        "created": 1764000001,
+        "created": 1795152710,
         "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
             "message": {
               "role": "assistant",
-              "content": null,
-              "reasoning_content": "La API devolvió el id y el precio. Registro la venta con el id exacto y el medio de pago que pidió el usuario; no mando ningún monto.",
+              "content": "",
+              "reasoning_content": "Found the product: \"Azúcar común 1 kg\" with id prod_azucar_comun, SKU AZU-COMUN-1KG, price 150000 cents ($1500.00 presumably). Stock 10, enough for 2. Register the sale: 2 units, EFECTIVO.",
               "tool_calls": [
                 {
-                  "id": "call_simple_sale_2",
+                  "id": "call_0436ca1f2f754adaa27d325b",
                   "type": "function",
                   "function": {
                     "name": "registrar_venta",
-                    "arguments": "{\"items\":[{\"producto_id\":\"prod_azucar_comun\",\"cantidad\":2}],\"medio_pago\":\"EFECTIVO\"}"
+                    "arguments": "{\"items\":[{\"cantidad\": 2, \"producto_id\": \"prod_azucar_comun\"}],\"medio_pago\":\"EFECTIVO\"}"
                   }
                 }
               ]
@@ -55,25 +65,44 @@
             "finish_reason": "tool_calls"
           }
         ],
-        "usage": { "prompt_tokens": 1260, "completion_tokens": 54, "total_tokens": 1314 }
+        "usage": {
+          "prompt_tokens": 1793,
+          "completion_tokens": 106,
+          "total_tokens": 1899,
+          "completion_tokens_details": {
+            "reasoning_tokens": 64
+          },
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
       },
       {
-        "id": "chatcmpl-eval-simple-sale-3",
+        "id": "chatcmpl-8f27dbd4ff20f6f093df74a802677dda",
         "object": "chat.completion",
-        "created": 1764000002,
+        "created": 1795152716,
         "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
             "message": {
               "role": "assistant",
-              "content": "Registré la venta #1: 2 × Azúcar común 1 kg, total $3.000, en efectivo.",
-              "reasoning_content": "La venta salió bien. Repito el número y el total que devolvió la API, sin calcular nada."
+              "content": "Venta registrada: N° 1, total $3.000,00, efectivo."
             },
             "finish_reason": "stop"
           }
         ],
-        "usage": { "prompt_tokens": 1330, "completion_tokens": 48, "total_tokens": 1378 }
+        "usage": {
+          "prompt_tokens": 1939,
+          "completion_tokens": 22,
+          "total_tokens": 1961,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
       }
     ]
   ]

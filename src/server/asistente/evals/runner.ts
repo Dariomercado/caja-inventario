@@ -15,6 +15,7 @@ import { mensajesParaElModelo } from '../conversacion'
 import { crearHerramientas, type DefinicionHerramienta } from '../herramientas'
 import { crearClienteModelo, type ClienteModelo } from '../modelo'
 import type { CasoEval, ExpectativasEfectos, ExpectativasGuionizado, FixtureEval, NivelEval, TextoInformativo } from './caso'
+import { leerRespuestaGrabada, type RespuestaGrabada } from './caso'
 import { reproductorDeFixture, transporteEnProceso, type PeticionObservada } from './transporte'
 
 /**
@@ -78,11 +79,19 @@ export type ResultadoCaso = {
   failures: string[]
   /** Fragments from `informative`: what the reply said, never a criterion (S9). */
   informative: string[]
+  /** What the panel would show of this run: the reply and the calls behind it (S10). */
+  transcripcion: TranscripcionDeCaso
   toolCalls: string[]
   inputTokens: number
   outputTokens: number
   latencyMs: number
 }
+
+/** Una llamada de herramienta, como la mostraría el panel del asistente. */
+export type LlamadaTranscrita = { nombre: string; estado: 'ok' | 'error'; detalle: string }
+
+/** El turno del asistente de una corrida: su texto final y las herramientas que ejecutó. */
+export type TranscripcionDeCaso = { texto: string; llamadas: LlamadaTranscrita[] }
 
 /**
  * Everything a case declared, measured against what actually happened.
@@ -368,10 +377,110 @@ export function fabricaOffline(fixture: FixtureEval): FabricaDeModelo {
 }
 
 /** Live model: the same cases against the real provider (S8). */
-export function fabricaLive(configuracion: ConfiguracionLive): FabricaDeModelo {
-  const modelo = crearClienteModelo(configuracion)
-  const fabrica = (): ModeloDeIntento => ({ modelo, sobrantes: () => 0 })
-  return Object.assign(fabrica, { tier: 'live' as const })
+export type OpcionesFabricaLive = {
+  /** Record every provider response, in attempt order (`--grabar`). */
+  grabar?: boolean
+  /** Only for tests: the recording path is the same, the network stays out. */
+  transporte?: Transporte
+}
+
+/**
+ * A live factory that can hand back what the provider sent, in fixture shape.
+ *
+ * The capture happens in the transport wrapper, which is the only boundary where
+ * the body is still exactly the provider's answer: recording there keeps a single
+ * fixture format (`RespuestaGrabada` → `FixtureEval`), the same one `caso.ts` loads,
+ * instead of inventing a second one for recordings.
+ */
+export type FabricaLive = FabricaDeModelo & { captura: () => FixtureEval }
+
+export function fabricaLive(
+  configuracion: ConfiguracionLive,
+  opciones: OpcionesFabricaLive = {},
+): FabricaLive {
+  const bloques: RespuestaGrabada[][] = []
+  const base: Transporte = opciones.transporte ?? ((peticion: Request) => fetch(peticion))
+
+  const fabrica = (intento: number): ModeloDeIntento => {
+    const transporte: Transporte = opciones.grabar
+      ? async (peticion: Request) => {
+          const respuesta = await base(peticion)
+          // Cloning keeps the body the loop reads untouched; validating here means a
+          // provider answer that is not a fixture stops the case instead of being
+          // written as a file the offline tier could not load.
+          const grabada = leerRespuestaGrabada(await respuesta.clone().json())
+          const bloque = bloques[intento] ?? (bloques[intento] = [])
+          bloque.push(grabada)
+          return respuesta
+        }
+      : base
+
+    return {
+      modelo: crearClienteModelo({ ...configuracion, transporte }),
+      sobrantes: () => 0,
+    }
+  }
+
+  return Object.assign(fabrica, {
+    tier: 'live' as const,
+    // `Array.from` and not `map`: a sparse array would serialize a hole as `null`
+    // and produce a fixture the loader rejects.
+    captura: (): FixtureEval => ({
+      attempts: Array.from({ length: bloques.length }, (_, indice) => bloques[indice] ?? []),
+    }),
+  })
+}
+
+/** One case's live capture, with the facts that decide whether it may replace the baseline. */
+export type CapturaDeCaso = {
+  /** Case file name, for messages. */
+  file: string
+  /** Fixture basename the capture would replace. */
+  fixture: string
+  captura: FixtureEval
+  /** Whether the live run met every effect the case requires. */
+  ok: boolean
+  /** True when the case did not run in this tier. */
+  skipped: boolean
+  /** Attempts the case declares: the loader needs one block per attempt. */
+  intentos: number
+}
+
+export type DecisionDeGrabado =
+  | { fixture: string; escribir: FixtureEval }
+  | { fixture: string; conservar: string }
+
+/**
+ * Which captures may replace their fixture.
+ *
+ * The hand-authored fixtures are the only working baseline, so a capture is written
+ * only when the live run met the case's effects and the shape matches the attempts
+ * the case declares. A failed run, a skipped case and a capture with the wrong
+ * number of blocks all keep the old file and say why: a recording that does not
+ * reproduce is a finding to report, never a baseline to adopt.
+ */
+export function decidirGrabado(capturas: CapturaDeCaso[]): DecisionDeGrabado[] {
+  return capturas.map(({ fixture, captura, ok, skipped, intentos }) => {
+    if (skipped) {
+      return { fixture, conservar: 'el caso no corre en este nivel: no se escribe nada' }
+    }
+
+    if (!ok) {
+      return {
+        fixture,
+        conservar: 'la corrida live no cumplió sus efectos: la baseline no se reemplaza',
+      }
+    }
+
+    if (captura.attempts.length !== intentos) {
+      return {
+        fixture,
+        conservar: `la captura trae ${captura.attempts.length} bloque(s) y el caso declara ${intentos} intento(s)`,
+      }
+    }
+
+    return { fixture, escribir: captura }
+  })
 }
 
 /**
@@ -577,6 +686,7 @@ export async function correrCaso(caso: CasoEval, fabrica: FabricaDeModelo): Prom
       skipped: true,
       failures: [],
       informative: [],
+      transcripcion: { texto: '', llamadas: [] },
       toolCalls: [],
       inputTokens: 0,
       outputTokens: 0,
@@ -603,6 +713,18 @@ export async function correrCaso(caso: CasoEval, fabrica: FabricaDeModelo): Prom
     skipped: false,
     failures: fallas,
     informative: observarTextoInformativo(caso.informative, observacion.text),
+    transcripcion: {
+      texto: ejecucion.texto,
+      llamadas: ejecucion.llamadas.map((llamada) =>
+        llamada.resultado.ok
+          ? { nombre: llamada.nombre, estado: 'ok' as const, detalle: '' }
+          : {
+              nombre: llamada.nombre,
+              estado: 'error' as const,
+              detalle: `${llamada.resultado.error.code}: ${llamada.resultado.error.message}`,
+            },
+      ),
+    },
     toolCalls: ejecucion.llamadas.map((llamada) => llamada.nombre),
     inputTokens: ejecucion.entrada,
     outputTokens: ejecucion.salida,

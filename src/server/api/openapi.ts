@@ -18,6 +18,7 @@ import {
   esquemaTopProducto,
   esquemaTopProductosQuery,
   esquemaVentaDetalle,
+  esquemaVentaRegistrada,
 } from './esquemas'
 
 /**
@@ -49,6 +50,12 @@ type OperacionDocumentada = {
   parameters?: z.ZodType
   body?: z.ZodType
   respuesta: RespuestaDocumentada
+  /**
+   * Códigos de éxito que devuelven el mismo cuerpo, en orden de importancia. Por
+   * defecto 200; `POST /ventas` agrega 201 porque crear y reenviar comparten cuerpo y
+   * un consumidor que sólo lee el documento tiene que saber que puede recibir 201.
+   */
+  exitos?: number[]
   /** Códigos de error que el endpoint puede devolver además del 500 genérico. */
   errores?: number[]
 }
@@ -90,10 +97,9 @@ function respuestas(operacion: OperacionDocumentada) {
       : {}),
   })
 
-  const codigos = [200, ...(operacion.errores ?? [])]
-  const salida: Record<string, unknown> = {
-    [codigos[0]!]: json(operacion.respuesta),
-  }
+  const codigos = operacion.exitos ?? [200]
+  const salida: Record<string, unknown> = {}
+  for (const codigo of codigos) salida[codigo] = json(operacion.respuesta)
 
   if (operacion.errores?.includes(400)) {
     salida[400] = { description: 'Entrada inválida.', ...cuerpoError() }
@@ -202,8 +208,9 @@ const OPERACIONES: OperacionDocumentada[] = [
     respuesta: {
       description:
         '201 si la venta es nueva, 200 si es el reenvío de la misma clave. El cuerpo es idéntico.',
-      schema: esquemaVentaDetalle,
+      schema: esquemaVentaRegistrada,
     },
+    exitos: [201, 200],
     errores: [400, 401, 403, 409, 429],
   },
   {
@@ -317,7 +324,11 @@ export function documentoOpenAPI(): Record<string, unknown> {
       version: '1.0.0',
       description:
         'API de caja e inventario. El dinero se expresa siempre en centavos enteros. ' +
-        'Todos los errores comparten la forma { error: { code, message } } y `code` es estable.',
+        'Todos los errores comparten la forma { error: { code, message } } y `code` es estable. ' +
+        'Es una API de una sola tienda: un token actúa en nombre de la tienda, así que lee el ' +
+        'catálogo y las ventas de todos los usuarios, y las escrituras quedan atribuidas al ' +
+        'usuario dueño del token. Un token no está aislado por usuario; los reportes son de ' +
+        'caja del negocio, no de una persona.',
     },
     servers: [{ url: '/api/v1' }],
     security: [{ bearer: [] }],

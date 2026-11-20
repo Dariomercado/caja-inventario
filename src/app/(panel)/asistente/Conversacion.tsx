@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { conversar, type LlamadaVisible } from '@/app/actions/asistente'
+import type { ReplayGrabado } from '@/server/asistente/replay'
+import { Replay } from './Replay'
 
 type Turno = {
   rol: 'usuario' | 'asistente'
@@ -21,12 +23,18 @@ type Presupuesto = { usadasHoy: number; topeDiario: number }
  * confirmando ("dale") tendría que encontrar el intento anterior; guardándola en el
  * navegador, la misma clave vuelve y el servidor devuelve la venta que ya existe en
  * lugar de crear otra (S5).
+ *
+ * El modo replay es un **estado del panel**, no un turno más: cuando el presupuesto se
+ * agota a mitad de la charla, la conversación se reemplaza por la corrida grabada. Un
+ * turno del asistente ahí sería pasar una grabación por respuesta del día.
  */
 export function Conversacion() {
   const [turnos, setTurnos] = useState<Turno[]>([])
   const [borrador, setBorrador] = useState('')
   const [claveIdempotencia, setClaveIdempotencia] = useState<string | undefined>(undefined)
   const [presupuesto, setPresupuesto] = useState<Presupuesto | null>(null)
+  const [grabado, setGrabado] = useState<ReplayGrabado | null>(null)
+  const [avisoReplay, setAvisoReplay] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pendiente, iniciar] = useTransition()
 
@@ -57,10 +65,10 @@ export function Conversacion() {
       setPresupuesto({ usadasHoy: respuesta.usadasHoy, topeDiario: respuesta.topeDiario })
 
       if (respuesta.estado === 'replay') {
-        setTurnos((previos) => [
-          ...previos,
-          { rol: 'asistente', texto: respuesta.texto, aviso: 'modo replay' },
-        ])
+        // El panel pasa a mostrar la grabación; si no hay grabación legible, el aviso se
+        // muestra como aviso y no como si el asistente hubiera contestado.
+        setAvisoReplay(respuesta.texto)
+        if (respuesta.grabado) setGrabado(respuesta.grabado)
         return
       }
 
@@ -75,6 +83,11 @@ export function Conversacion() {
         },
       ])
     })
+  }
+
+  // El estado de replay no convive con la charla: reemplaza el panel entero.
+  if (grabado) {
+    return <Replay grabado={grabado} motivo={avisoReplay ?? undefined} />
   }
 
   return (
@@ -133,6 +146,12 @@ export function Conversacion() {
 
         {pendiente ? <p className="text-sm text-slate-400">Pensando…</p> : null}
       </div>
+
+      {avisoReplay ? (
+        <p className="rounded-xl border border-amber-900 bg-amber-950/30 px-4 py-2 text-sm text-amber-200">
+          {avisoReplay}
+        </p>
+      ) : null}
 
       {error ? (
         <p className="rounded-xl border border-rose-900 bg-rose-950/40 px-4 py-2 text-sm text-rose-200">

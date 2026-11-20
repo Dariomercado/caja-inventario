@@ -2,20 +2,20 @@
   "attempts": [
     [
       {
-        "id": "chatcmpl-eval-ambiguous-product-1",
+        "id": "chatcmpl-53045746f052a48c632906c8734ee5a5",
         "object": "chat.completion",
-        "created": 1764000100,
+        "created": 1795152721,
         "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
             "message": {
               "role": "assistant",
-              "content": null,
-              "reasoning_content": "«Dos azúcares» puede ser común o light. Antes de vender necesito el catálogo y después pregunto con las opciones concretas.",
+              "content": "",
+              "reasoning_content": "El usuario pide vender 2 azúcares. Necesito identificar el producto de forma inequívoca con listar_productos. Voy a listar productos para encontrar el azúcar.",
               "tool_calls": [
                 {
-                  "id": "call_ambiguous_1",
+                  "id": "call_f96544abfbed4b96ab425046",
                   "type": "function",
                   "function": {
                     "name": "listar_productos",
@@ -27,25 +27,45 @@
             "finish_reason": "tool_calls"
           }
         ],
-        "usage": { "prompt_tokens": 960, "completion_tokens": 46, "total_tokens": 1006 }
+        "usage": {
+          "prompt_tokens": 1613,
+          "completion_tokens": 56,
+          "total_tokens": 1669,
+          "completion_tokens_details": {
+            "reasoning_tokens": 39
+          },
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
       },
       {
-        "id": "chatcmpl-eval-ambiguous-product-2",
+        "id": "chatcmpl-8a348084bb69f8b30d3a2895ada343ec",
         "object": "chat.completion",
-        "created": 1764000101,
+        "created": 1795152731,
         "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
             "message": {
               "role": "assistant",
-              "content": "Hay dos azúcares en el catálogo: «Azúcar común 1 kg» (SKU AZU-COMUN-1KG, $1.500) y «Azúcar light 1 kg» (SKU AZU-LIGHT-1KG, $1.800). ¿Cuál de las dos querés?",
-              "reasoning_content": "La ambigüedad es real: no elijo por el usuario. Ofrezco las opciones que devolvió la API y no registro nada todavía."
+              "content": "Encontré dos productos que coinciden con \"azúcar\", así que necesito que me aclares cuál querés:\n\n1. **Azúcar común 1 kg** — SKU: AZU-COMUN-1KG — $1.500\n2. **Azúcar light 1 kg** — SKU: AZU-LIGHT-1KG — $1.800\n\n¿Cuál vendés y con qué medio de pago (efectivo, transferencia o tarjeta)?",
+              "reasoning_content": "Hay dos productos que son azúcar: \"Azúcar común 1 kg\" (AZU-COMUN-1KG, $1500) y \"Azúcar light 1 kg\" (AZU-LIGHT-1KG, $1800). El pedido \"2 azúcares\" no identifica inequívocamente el producto. Según la regla 3, debo preguntar y ofrecer las opciones concretas con nombre, SKU y precio. También falta el medio de pago (regla 4), pero primero clarifico el producto. Puedo preguntar ambos a la vez: cuál azúcar y medio de pago."
             },
             "finish_reason": "stop"
           }
         ],
-        "usage": { "prompt_tokens": 1240, "completion_tokens": 62, "total_tokens": 1302 }
+        "usage": {
+          "prompt_tokens": 1778,
+          "completion_tokens": 239,
+          "total_tokens": 2017,
+          "completion_tokens_details": {
+            "reasoning_tokens": 137
+          },
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
       }
     ]
   ]

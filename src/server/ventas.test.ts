@@ -237,6 +237,31 @@ describe('registrarVenta', () => {
     expect(productoDespues.stock).toBe(8)
   })
 
+  it('ocho envíos simultáneos con la misma clave devuelven todos la misma venta', async () => {
+    const usuario = await crearUsuario()
+    const producto = await crearProducto({ precioCentavos: 100_000, stock: 10 })
+    const intento = {
+      usuarioId: usuario.id,
+      claveIdempotencia: randomUUID(),
+      items: [{ productoId: producto.id, cantidad: 2 }],
+      medioPago: 'EFECTIVO' as const,
+    }
+
+    // Ocho a la vez, no dos: la carrera depende de que varios lleguen al INSERT antes
+    // de que el ganador confirme. Un reintento del cliente después de un timeout de
+    // red es exactamente esto, y recibir un 500 en un pedido cuyo efecto sí ocurrió
+    // es peor que recibir la venta.
+    const resultados = await Promise.all(Array.from({ length: 8 }, () => registrarVenta(intento)))
+
+    expect(new Set(resultados.map((venta) => venta.numero)).size).toBe(1)
+    expect(await prisma.venta.count()).toBe(1)
+    expect(await prisma.lineaVenta.count()).toBe(1)
+    expect(await prisma.movimientoStock.count()).toBe(1)
+    expect(
+      (await prisma.producto.findUniqueOrThrow({ where: { id: producto.id } })).stock,
+    ).toBe(8)
+  })
+
   it('un reintento con la misma clave devuelve la venta, y con otro carrito la rechaza', async () => {
     const usuario = await crearUsuario()
     // Stock justo: la primera venta lo agota, así que un reintento no llega nunca al

@@ -26,15 +26,27 @@
 // Usage:
 //   DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm run evals
 //   DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm run evals -- --live
+//   DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm run evals -- --live --grabar
+//
+// `--grabar` records the live run into `evals/fixtures/<case>.json`, in the same format
+// the offline tier loads, and then re-runs the offline tier from what it wrote. It also
+// rewrites `src/server/asistente/replay-grabado.json`, the recorded exchange the panel
+// serves in replay mode, from case `01-simple-sale`'s live result. It requires `--live`,
+// and a case whose live run failed never replaces its fixture: the hand-authored
+// baseline is what makes the suite runnable, so a capture that does not reproduce an
+// effect is reported, not adopted.
 //
 // The live tier reads `ASISTENTE_MODELO_API_KEY` (and optionally
 // `ASISTENTE_MODELO` / `ASISTENTE_MODELO_BASE_URL`) from the environment or, if the
 // variable is not set, from `.env`.
+import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const modoLive = process.argv.slice(2).includes('--live')
+const argumentos = process.argv.slice(2)
+const modoLive = argumentos.includes('--live')
+const modoGrabar = argumentos.includes('--grabar')
 
 // The live tier needs the provider key, and the only safe place for it on a
 // development machine is `.env` — which is human-controlled and never echoed.
@@ -59,6 +71,13 @@ function morir(mensaje) {
   process.exit(1)
 }
 
+// Recording is a property of the live tier: there is nothing to record offline, where
+// the model is a file we already have. Failing here is the only honest answer — the
+// alternative is running the whole suite and writing nothing.
+if (modoGrabar && !modoLive) {
+  morir('--grabar necesita --live: sólo se graba el modelo real. Ejemplo: npm run evals -- --live --grabar')
+}
+
 // The guard is imported before anything that opens a connection: a wrong
 // `DATABASE_URL` has to abort before the first write, not after it.
 const { assertTestDatabase } = await import('../src/test/guard.ts')
@@ -69,8 +88,11 @@ try {
 }
 
 const {
+  CASO_DEL_REPLAY,
+  componerReplayGrabado,
   correrCaso,
   configuracionLiveDesdeEntorno,
+  decidirGrabado,
   fabricaLive,
   fabricaOffline,
   filasConOmitidos,
@@ -100,25 +122,46 @@ function imprimirFallas(resultados) {
  * Runs one tier over the cases that declare it.
  *
  * The tier list is built before running anything, so this tier never seeds nor
- * executes a case it cannot judge. The result still carries one row per case, in
- * file order, with `skip` where nothing ran.
+ * executes a case it cannot judge. The result carries one row per case, in file
+ * order, with `skip` where nothing ran; the captures are only for the cases that
+ * actually ran with a recording factory.
  */
 async function correrTier(nivel, fabricaDe) {
   const delNivel = casos.filter(({ caso }) => caso.tiers.includes(nivel))
   const resultados = []
+  const capturas = []
 
   for (const cargado of delNivel) {
+    const fabrica = fabricaDe(cargado)
+
     try {
-      resultados.push(await correrCaso(cargado.caso, fabricaDe(cargado)))
+      const resultado = await correrCaso(cargado.caso, fabrica)
+      resultados.push(resultado)
+
+      if (typeof fabrica.captura === 'function') {
+        capturas.push({
+          file: cargado.file,
+          fixture: cargado.caso.fixture,
+          captura: fabrica.captura(),
+          ok: resultado.ok,
+          skipped: resultado.skipped,
+          intentos: cargado.caso.request.attempts,
+          // The replay panel is composed from the same run, so the transcript and the
+          // case travel with the capture instead of being re-derived later.
+          caso: cargado.caso,
+          transcripcion: resultado.transcripcion,
+        })
+      }
     } catch (error) {
       // A case whose fixture is stale or whose run threw is a failure, not a reason
-      // to hide the other rows.
+      // to hide the other rows. Nothing is recorded: a half capture is not a fixture.
       resultados.push({
         name: cargado.caso.name,
         ok: false,
         skipped: false,
         failures: [`la ejecución falló: ${error instanceof Error ? error.message : String(error)}`],
         informative: [],
+        transcripcion: { texto: '', llamadas: [] },
         toolCalls: [],
         inputTokens: 0,
         outputTokens: 0,
@@ -127,28 +170,139 @@ async function correrTier(nivel, fabricaDe) {
     }
   }
 
-  return filasConOmitidos(casos, resultados)
+  return { filas: filasConOmitidos(casos, resultados), capturas }
 }
 
-const filasOffline = await correrTier('offline', (cargado) => fabricaOffline(cargado.fixture))
-console.log(`\n${formatearTabla('evals · offline tier (fixtures + in-process /api/v1)', filasOffline)}`)
-imprimirFallas(filasOffline)
+/** The offline tier as the files on disk are right now, for the post-recording re-run. */
+async function correrOfflineDesdeArchivos() {
+  const releidos = leerCasos(resolve(RAIZ, 'evals/cases'), resolve(RAIZ, 'evals/fixtures'))
+  const resultados = []
 
-let filasLive = []
+  for (const cargado of releidos) {
+    try {
+      resultados.push(await correrCaso(cargado.caso, fabricaOffline(cargado.fixture)))
+    } catch (error) {
+      resultados.push({
+        name: cargado.caso.name,
+        ok: false,
+        skipped: false,
+        failures: [`la ejecución falló: ${error instanceof Error ? error.message : String(error)}`],
+        informative: [],
+        transcripcion: { texto: '', llamadas: [] },
+        toolCalls: [],
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs: 0,
+      })
+    }
+  }
+
+  return filasConOmitidos(releidos, resultados)
+}
+
+const offline = await correrTier('offline', (cargado) => fabricaOffline(cargado.fixture))
+console.log(`\n${formatearTabla('evals · offline tier (fixtures + in-process /api/v1)', offline.filas)}`)
+imprimirFallas(offline.filas)
+
+let live = { filas: [], capturas: [] }
 
 if (modoLive) {
   const configuracion = configuracionLiveDesdeEntorno()
   if (!configuracion) {
     console.log('live tier skipped: ASISTENTE_MODELO_API_KEY is not set.')
+    if (modoGrabar) console.log('[grabar] no se escribió ninguna fixture: no hubo corrida live que grabar.')
   } else {
-    filasLive = await correrTier('live', () => fabricaLive(configuracion))
-    console.log(`\n${formatearTabla(`evals · live tier (${configuracion.nombre})`, filasLive)}`)
-    imprimirFallas(filasLive)
+    live = await correrTier('live', () => fabricaLive(configuracion, { grabar: modoGrabar }))
+    console.log(`\n${formatearTabla(`evals · live tier (${configuracion.nombre})`, live.filas)}`)
+    imprimirFallas(live.filas)
   }
 }
 
-// A skipped row never fails: it did not run, so it proves nothing either way.
-const todos = [...filasOffline, ...filasLive]
+let offlineFinal = offline.filas
+
+if (modoGrabar && live.capturas.length > 0) {
+  const anteriores = new Map()
+  const escritas = []
+  const conservadas = []
+
+  for (const decision of decidirGrabado(live.capturas)) {
+    if (!('escribir' in decision)) {
+      conservadas.push(decision)
+      continue
+    }
+
+    const ruta = resolve(RAIZ, 'evals/fixtures', decision.fixture)
+    // The previous bytes stay in memory until the offline re-run proves the capture.
+    anteriores.set(decision.fixture, readFileSync(ruta))
+    writeFileSync(ruta, `${JSON.stringify(decision.escribir, null, 2)}\n`)
+    escritas.push(decision.fixture)
+  }
+
+  console.log(`\n[grabar] fixtures reemplazadas (${escritas.length}): ${escritas.join(', ') || 'ninguna'}`)
+  for (const conservada of conservadas) {
+    console.log(`[grabar] conservada ${conservada.fixture}: ${conservada.conservar}`)
+  }
+
+  const fixturePorNombre = new Map(casos.map(({ caso }) => [caso.name, caso.fixture]))
+  const restauradas = []
+
+  // El panel del modo replay se arma con el mismo constructor, desde el resultado del
+  // caso 01 en vivo. Si ese caso no corrió, falló, o la captura no alcanza para fecharlo,
+  // el archivo anterior queda como está: una grabación sin fecha sería una respuesta
+  // fija disfrazada de corrida.
+  const delReplay = live.capturas.find(({ file }) => file === CASO_DEL_REPLAY)
+  const rutaReplay = resolve(RAIZ, 'src/server/asistente/replay-grabado.json')
+
+  if (!delReplay) {
+    console.log(`[grabar] replay-grabado.json sin cambios: ${CASO_DEL_REPLAY} no corrió en el nivel live.`)
+  } else if (!delReplay.ok) {
+    console.log(`[grabar] replay-grabado.json sin cambios: ${CASO_DEL_REPLAY} falló en vivo.`)
+  } else {
+    const grabado = componerReplayGrabado({
+      caso: delReplay.caso,
+      transcripcion: delReplay.transcripcion,
+      captura: delReplay.captura,
+    })
+
+    if (!grabado) {
+      console.log('[grabar] replay-grabado.json sin cambios: la captura no alcanza para armar la corrida grabada.')
+    } else {
+      writeFileSync(rutaReplay, `${JSON.stringify(grabado, null, 2)}\n`)
+      console.log(
+        `[grabar] replay-grabado.json actualizado desde ${CASO_DEL_REPLAY} (${grabado.fecha}, ${grabado.modelo}).`,
+      )
+    }
+  }
+
+  offlineFinal = await correrOfflineDesdeArchivos()
+
+  // A recording that does not reproduce its case is a finding, not a new baseline: the
+  // previous file goes back and the run says which case and which effect it lost.
+  for (const fila of offlineFinal.filter((resultado) => !resultado.ok)) {
+    const fixture = fixturePorNombre.get(fila.name)
+    if (!fixture || !anteriores.has(fixture)) continue
+
+    writeFileSync(resolve(RAIZ, 'evals/fixtures', fixture), anteriores.get(fixture))
+    restauradas.push({ fixture, motivo: fila.failures.join(' | ') })
+  }
+
+  console.log(`\n${formatearTabla('evals · offline re-run (recorded fixtures)', offlineFinal)}`)
+  imprimirFallas(offlineFinal)
+
+  if (restauradas.length > 0) {
+    for (const restaurada of restauradas) {
+      console.log(`[grabar] restaurada ${restaurada.fixture}: el offline no reprodujo — ${restaurada.motivo}`)
+    }
+
+    offlineFinal = await correrOfflineDesdeArchivos()
+    console.log(`\n${formatearTabla('evals · offline re-run (after restoring the kept fixtures)', offlineFinal)}`)
+    imprimirFallas(offlineFinal)
+  }
+}
+
+// A skipped row never fails: it did not run, so it proves nothing either way. A
+// recording that had to be restored does fail this run: its purpose was to record.
+const todas = [...live.filas, ...offlineFinal]
 await prisma.$disconnect()
 
-if (todos.some((resultado) => !resultado.ok)) process.exitCode = 1
+if (todas.some((resultado) => !resultado.ok)) process.exitCode = 1

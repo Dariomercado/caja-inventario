@@ -2,24 +2,24 @@
   "attempts": [
     [
       {
-        "id": "chatcmpl-eval-money-1",
+        "id": "chatcmpl-40c4e5794eb0cff2536d6a5ff2201445",
         "object": "chat.completion",
-        "created": 1764000200,
+        "created": 1795152739,
         "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
             "message": {
               "role": "assistant",
-              "content": null,
-              "reasoning_content": "Necesito el precio real para responder el total. Busco el producto en el catálogo.",
+              "content": "",
+              "reasoning_content": "The user wants to sell 3 units of \"yerba mate de 1 kg\" via transfer. First, I need to identify the product using listar_productos. Let me check the catalog to find the yerba mate product. The request seems fairly unambiguous (\"yerba mate de 1 kg\"), but I should verify with the API what products exist. If there's only one yerba mate 1kg, I can proceed. Quantity (3) and payment method (transferencia) are given, so if the product is unambiguous, I can register the sale.\n\nLet me list products first.",
               "tool_calls": [
                 {
-                  "id": "call_money_1",
+                  "id": "call_c133f327a27745c693b96f7b",
                   "type": "function",
                   "function": {
                     "name": "listar_productos",
-                    "arguments": "{\"solo_activos\":true}"
+                    "arguments": "{}"
                   }
                 }
               ]
@@ -27,27 +27,37 @@
             "finish_reason": "tool_calls"
           }
         ],
-        "usage": { "prompt_tokens": 1010, "completion_tokens": 39, "total_tokens": 1049 }
+        "usage": {
+          "prompt_tokens": 1622,
+          "completion_tokens": 131,
+          "total_tokens": 1753,
+          "completion_tokens_details": {
+            "reasoning_tokens": 123
+          },
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
       },
       {
-        "id": "chatcmpl-eval-money-2",
+        "id": "chatcmpl-13d1d7108ca80adb5ea8626a1e0f040d",
         "object": "chat.completion",
-        "created": 1764000201,
+        "created": 1795152745,
         "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
             "message": {
               "role": "assistant",
-              "content": null,
-              "reasoning_content": "El esquema de registrar_venta no acepta precio ni total, así que mando sólo el id, la cantidad y el medio de pago. El servidor calcula el monto.",
+              "content": "",
+              "reasoning_content": "The product is unambiguous: \"Yerba mate 1 kg\", SKU YER-MATE-1KG, id prod_yerba, stock 12, active. Quantity 3, payment TRANSFERENCIA. Register the sale.",
               "tool_calls": [
                 {
-                  "id": "call_money_2",
+                  "id": "call_47194c6f89a1459388a21426",
                   "type": "function",
                   "function": {
                     "name": "registrar_venta",
-                    "arguments": "{\"items\":[{\"producto_id\":\"prod_yerba\",\"cantidad\":3}],\"medio_pago\":\"TRANSFERENCIA\"}"
+                    "arguments": "{\"items\":[{\"cantidad\": 3, \"producto_id\": \"prod_yerba\"}],\"medio_pago\":\"TRANSFERENCIA\"}"
                   }
                 }
               ]
@@ -55,25 +65,44 @@
             "finish_reason": "tool_calls"
           }
         ],
-        "usage": { "prompt_tokens": 1290, "completion_tokens": 57, "total_tokens": 1347 }
+        "usage": {
+          "prompt_tokens": 1817,
+          "completion_tokens": 90,
+          "total_tokens": 1907,
+          "completion_tokens_details": {
+            "reasoning_tokens": 50
+          },
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
       },
       {
-        "id": "chatcmpl-eval-money-3",
+        "id": "chatcmpl-23d2cb598c8a84a2a4de58d6155ad239",
         "object": "chat.completion",
-        "created": 1764000202,
+        "created": 1795152751,
         "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
             "message": {
               "role": "assistant",
-              "content": "La venta quedó registrada: 3 × Yerba mate 1 kg, total $7.500 por transferencia.",
-              "reasoning_content": "El total de $7.500 es el que devolvió la API, no una cuenta mía. Lo repito tal cual."
+              "content": "Venta registrada: **venta N° 1**, total **$7.500,00** por transferencia. ✅"
             },
             "finish_reason": "stop"
           }
         ],
-        "usage": { "prompt_tokens": 1370, "completion_tokens": 44, "total_tokens": 1414 }
+        "usage": {
+          "prompt_tokens": 1948,
+          "completion_tokens": 28,
+          "total_tokens": 1976,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          }
+        }
       }
     ]
   ]

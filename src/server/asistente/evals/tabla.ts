@@ -54,6 +54,7 @@ export function filasConOmitidos(
         skipped: true,
         failures: [],
         informative: [],
+        transcripcion: { texto: '', llamadas: [] },
         toolCalls: [],
         inputTokens: 0,
         outputTokens: 0,

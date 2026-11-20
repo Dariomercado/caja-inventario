@@ -97,13 +97,55 @@ declara el nivel aparece como `skip` —nunca como `PASS`— y el total cuenta s
 corrió, por ejemplo `TOTAL (6 cases, 6 pass, 0 fail, 3 skipped)`. Una fila `skip` no
 falla la corrida: no corrió, así que no prueba nada en ninguno de los dos sentidos.
 
+```bash
+npm run evals -- --live --grabar
+```
+
+`--grabar` graba la corrida live en `evals/fixtures/<caso>.json` y después **vuelve a
+correr el nivel offline con lo que acaba de escribir**, para que una grabación que no
+reproduce se vea en la misma corrida. Necesita `--live`: solo, aborta con un mensaje y
+sale 1, porque el nivel offline no llama a nadie y no hay nada que grabar.
+
+La captura se hace en el borde del transporte del modelo, así que el cuerpo grabado es
+exactamente el que devolvió el proveedor y exactamente la forma que `caso.ts` ya carga:
+un solo formato de fixture, no dos. Una respuesta que no se puede cargar como fixture no
+se escribe: el caso falla en el momento, con el motivo.
+
+**Una grabación que no reproduce no reemplaza la baseline.** Las fixtures existentes son
+lo único que corre cuando no hay proveedor, así que:
+
+- se escribe sólo el caso cuya corrida live cumplió sus efectos;
+- un caso que falló en vivo, o que el nivel no corre, conserva su archivo y la corrida lo
+  informa con el motivo;
+- si la re-corrida offline falla en un caso recién grabado, el archivo anterior se
+  restaura y la corrida dice cuál y qué efecto no reprodujo, y sale con código 1.
+
+No se debilita ninguna aserción para que una captura pase: si una captura real no
+reproduce un efecto, eso es un hallazgo para el reporte, no algo que se edita.
+
+Además de los fixtures, `--grabar` reescribe
+`src/server/asistente/replay-grabado.json`: la corrida grabada que el panel muestra en
+modo replay cuando se agota el presupuesto diario o falta configuración (S10, S13). Sale
+del resultado live del caso `01-simple-sale`, con su fecha y su id de modelo, y si ese
+caso no corrió, falló o la captura no se puede fechar, el archivo anterior queda como
+está y la corrida lo dice.
+
 La base tiene que terminar en `_test`: el corredor trunca tablas entre casos y se
 niega a tocar cualquier otra (misma regla que `src/test/guard.ts`). Sólo escribe su
 propia semilla: un usuario, un token con scopes acotados y los productos del caso.
 
 ## Los fixtures
 
-**Los fixtures de este repo son escritos a mano, no capturados de una llamada real.**
-Prueban el harness —elección de tool, argumentos, topes, idempotencia, efectos— y no el
-modelo. Eso es lo que mantiene el nivel offline determinista y gratis (S8); lo que el
-modelo hace de verdad lo dice el nivel live.
+Seis de los nueve fixtures son hoy **capturas reales** del proveedor
+(`glm5.3-flash`, 2026-11-20), grabadas con `--live --grabar`: traen el `id`, el
+`created`, el `reasoning_content` y el `usage` que devolvió el modelo, y el nivel offline
+los reproduce tal cual. Las tres que siguen escritas a mano son las de los casos
+`offline` solos (`04-insufficient-stock`, `07-unknown-tool`, `09-round-trip-cap`): esas
+prueban el harness —una herramienta inexistente, el tope de rondas, un 409 que no se
+reintenta— y el modelo real no tiene por qué recorrer ese camino, así que no hay nada
+que grabar.
+
+Que el offline sea determinista y gratis (S8) no depende de que las respuestas estén
+inventadas, sino de que estén fijas: una captura grabada es tan reproducible como una
+escrita a mano, y dice más, porque es lo que el modelo contestó de verdad una vez. Lo que
+el modelo hace **hoy** lo sigue diciendo el nivel live.
