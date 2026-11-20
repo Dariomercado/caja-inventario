@@ -82,7 +82,11 @@ evidencia que mostrar.
 - **T2 — Cliente del modelo y loop de tools.** Módulo que manda mensajes, recibe tool
   calls, las ejecuta contra `/api/v1` y devuelve el resultado, con el tope de round
   trips y el recorte de contexto. Es el corazón: sin esto no hay nada que medir.
-  Specs: S3, S4, S7, S10, S11.
+  Specs: S3, S4, S7, S10, S11. Hecho: `src/server/asistente/{config,api,modelo,herramientas,bucle,instrucciones}.ts`;
+  transporte inyectable en el cliente de API y en el del modelo (es lo que hace
+  posible el nivel offline), 8 herramientas sin ninguna de escritura de catálogo, y
+  `registrar_venta` sin un solo campo de dinero. Evidencia: 32 tests nuevos, suite
+  191/191, `tsc` y `eslint` limpios.
 - **T3 — Pantalla del asistente.** Ruta dentro de `(panel)`, protegida por la sesión,
   con el historial del intento, el estado de cada llamada y el modo replay visible.
   Specs: S1, S5, S10.
@@ -159,3 +163,33 @@ Consecuencias para el diseño:
    el endpoint acepte `tools`.
 4. Ningún número de esta tabla decide el diseño: el plan de Dario es plano, así que
    los precios son referencia de magnitud, no factura.
+
+**L8 — T2 implementado: el loop de herramientas.** Decisiones que se tomaron al
+escribirlo, no al especificarlo:
+
+1. **Transporte inyectable** en el cliente de `/api/v1` y en el del modelo. No es una
+   comodidad de test: es lo que permite que el nivel offline de las evals (S8) corra el
+   loop entero sin red y sin servidor, pasando igual por el armado de la petición, los
+   headers, el parseo del sobre de error y la validación de argumentos. Si el contrato
+   de `/api/v1` cambia, la eval offline se rompe igual que el asistente en producción.
+2. **S3 se garantiza por esquema, no por prompt.** `registrar_venta` no tiene ningún
+   campo de dinero y no expone `pagos`: el total lo calcula el servidor con el precio
+   real. Un test recorre los nombres de propiedad del JSON Schema generado y falla si
+   aparece `precio`, `total`, `subtotal`, `monto` o `centavos`.
+3. **La `Idempotency-Key` no es argumento de la herramienta.** La maneja el loop por
+   intento y sólo la renueva cuando una venta quedó creada, así el modelo no puede
+   "resolver" un conflicto inventando otra clave (S5, S7).
+4. **El tope de rondas degrada, no corta.** Alcanzadas las `maxRondas`, se deja de
+   ofrecer `tools` y se pide la respuesta en texto; si el modelo igual pide una
+   herramienta, no se ejecuta. Llamadas al modelo por pedido ≤ `maxRondas` + 1, y el
+   resultado trae `topeAlcanzado` para que la pantalla lo muestre (T3).
+5. **`glm-5.3` razona siempre:** el mensaje del proveedor se guarda y se devuelve
+   completo, `reasoning_content` incluido (L7.2). Un test lo compara campo por campo.
+6. **Los medios de pago quedaron en un solo lugar:** `MEDIOS_DE_PAGO` se exporta desde
+   `src/server/api/esquemas.ts` y el asistente lo importa en vez de repetir el enum.
+7. **Evidencia:** 32 tests nuevos (config 4, cliente de API 6, herramientas 8, loop 9,
+   cliente del modelo 5), suite **191/191**, `tsc` y `eslint` limpios.
+8. **Hallazgo aparte, no corregido acá:** el documento OpenAPI declara para
+   `POST /ventas` el esquema `esquemaVentaDetalle`, pero el handler devuelve sólo
+   `{ id, numero, totalCentavos }`. Es una divergencia de documentación preexistente;
+   queda anotada como aviso para no mezclarla con esta etapa.
