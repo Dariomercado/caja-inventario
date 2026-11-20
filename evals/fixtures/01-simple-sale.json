@@ -5,7 +5,7 @@
         "id": "chatcmpl-eval-simple-sale-1",
         "object": "chat.completion",
         "created": 1764000000,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
@@ -33,7 +33,7 @@
         "id": "chatcmpl-eval-simple-sale-2",
         "object": "chat.completion",
         "created": 1764000001,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
@@ -61,7 +61,7 @@
         "id": "chatcmpl-eval-simple-sale-3",
         "object": "chat.completion",
         "created": 1764000002,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,

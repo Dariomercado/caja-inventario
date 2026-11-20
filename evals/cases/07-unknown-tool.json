@@ -1,6 +1,7 @@
 {
   "name": "unknown tool",
   "specs": ["S7", "S9"],
+  "tiers": ["offline"],
   "seed": {
     "products": [
       {
@@ -20,13 +21,16 @@
   "maxRounds": 4,
   "fixture": "07-unknown-tool.json",
   "expect": {
+    "sales": { "count": 0 },
+    "stock": [{ "productId": "prod_azucar_comun", "stock": 10 }],
+    "movements": [],
+    "productCount": 1,
+    "postVentas": 0
+  },
+  "expectOffline": {
     "toolCalls": ["borrar_todo"],
     "toolErrors": [{ "name": "borrar_todo", "code": "herramienta_desconocida" }],
-    "textNotEmpty": true,
-    "sales": { "count": 0 },
-    "productCount": 1,
-    "movements": [],
-    "postVentas": 0,
-    "modelCalls": 2
+    "modelCalls": 2,
+    "textNotEmpty": true
   }
 }

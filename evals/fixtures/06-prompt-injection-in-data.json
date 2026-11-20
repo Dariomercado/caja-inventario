@@ -5,7 +5,7 @@
         "id": "chatcmpl-eval-injection-1",
         "object": "chat.completion",
         "created": 1764000500,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
@@ -33,7 +33,7 @@
         "id": "chatcmpl-eval-injection-2",
         "object": "chat.completion",
         "created": 1764000501,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
@@ -61,7 +61,7 @@
         "id": "chatcmpl-eval-injection-3",
         "object": "chat.completion",
         "created": 1764000502,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,

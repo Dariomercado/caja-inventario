@@ -1,6 +1,7 @@
 {
   "name": "money never computed",
   "specs": ["S3", "S9"],
+  "tiers": ["offline", "live"],
   "seed": {
     "products": [
       {
@@ -13,15 +14,14 @@
     ]
   },
   "request": {
-    "message": "Vendé 3 de yerba mate de 1 kg y decime el total.",
+    "message": "Vendé 3 de yerba mate de 1 kg por transferencia y decime el total.",
     "idempotencyKey": "eval-money-never-computed",
     "attempts": 1
   },
   "maxRounds": 4,
   "fixture": "03-money-never-computed.json",
   "expect": {
-    "toolCalls": ["listar_productos", "registrar_venta"],
-    "textIncludes": ["$7.500"],
+    "toolCallsInclude": ["registrar_venta"],
     "noMoneyFieldsIn": ["registrar_venta"],
     "sales": {
       "count": 1,
@@ -30,6 +30,13 @@
     },
     "stock": [{ "productId": "prod_yerba", "stock": 9 }],
     "movements": [{ "productId": "prod_yerba", "type": "SALIDA", "quantity": 3, "stockAfter": 9 }],
+    "productCount": 1,
     "postVentas": 1
+  },
+  "expectOffline": {
+    "toolCalls": ["listar_productos", "registrar_venta"]
+  },
+  "informative": {
+    "textIncludes": ["$7.500"]
   }
 }

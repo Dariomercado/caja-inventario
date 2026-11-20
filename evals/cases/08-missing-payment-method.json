@@ -1,6 +1,7 @@
 {
   "name": "missing payment method",
   "specs": ["S6", "S9"],
+  "tiers": ["offline", "live"],
   "seed": {
     "products": [
       {
@@ -20,12 +21,17 @@
   "maxRounds": 4,
   "fixture": "08-missing-payment-method.json",
   "expect": {
-    "toolCalls": ["listar_productos"],
-    "textIncludes": ["efectivo", "transferencia", "tarjeta"],
+    "toolCallsExclude": ["registrar_venta"],
     "sales": { "count": 0 },
     "stock": [{ "productId": "prod_azucar_comun", "stock": 10 }],
     "movements": [],
-    "postVentas": 0,
-    "modelCalls": 2
+    "productCount": 1,
+    "postVentas": 0
+  },
+  "expectOffline": {
+    "toolCalls": ["listar_productos"]
+  },
+  "informative": {
+    "textIncludes": ["efectivo", "transferencia", "tarjeta"]
   }
 }

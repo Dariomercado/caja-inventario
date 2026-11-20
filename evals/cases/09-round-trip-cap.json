@@ -1,6 +1,7 @@
 {
   "name": "round-trip cap",
   "specs": ["S10", "S9"],
+  "tiers": ["offline"],
   "seed": {
     "products": [
       {
@@ -20,11 +21,14 @@
   "maxRounds": 2,
   "fixture": "09-round-trip-cap.json",
   "expect": {
-    "toolCalls": ["listar_productos", "listar_productos"],
-    "topReached": true,
-    "modelCalls": 3,
     "sales": { "count": 0 },
     "stock": [{ "productId": "prod_azucar_comun", "stock": 10 }],
+    "movements": [],
     "postVentas": 0
+  },
+  "expectOffline": {
+    "toolCalls": ["listar_productos", "listar_productos"],
+    "topReached": true,
+    "modelCalls": 3
   }
 }

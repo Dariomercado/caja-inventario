@@ -5,7 +5,7 @@
         "id": "chatcmpl-eval-round-trip-cap-1",
         "object": "chat.completion",
         "created": 1764000800,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
@@ -33,7 +33,7 @@
         "id": "chatcmpl-eval-round-trip-cap-2",
         "object": "chat.completion",
         "created": 1764000801,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
@@ -61,7 +61,7 @@
         "id": "chatcmpl-eval-round-trip-cap-3",
         "object": "chat.completion",
         "created": 1764000802,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,

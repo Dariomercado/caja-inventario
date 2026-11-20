@@ -14,7 +14,7 @@ import {
 import { mensajesParaElModelo } from '../conversacion'
 import { crearHerramientas, type DefinicionHerramienta } from '../herramientas'
 import { crearClienteModelo, type ClienteModelo } from '../modelo'
-import type { CasoEval, ExpectativasEval, FixtureEval } from './caso'
+import type { CasoEval, ExpectativasEfectos, ExpectativasGuionizado, FixtureEval, NivelEval, TextoInformativo } from './caso'
 import { reproductorDeFixture, transporteEnProceso, type PeticionObservada } from './transporte'
 
 /**
@@ -51,10 +51,17 @@ const TABLAS = [
   '"Usuario"',
 ].join(', ')
 
-export type FabricaDeModelo = (intento: number) => {
-  modelo: ClienteModelo
-  sobrantes: () => number
-}
+export type ModeloDeIntento = { modelo: ClienteModelo; sobrantes: () => number }
+
+/**
+ * A factory of per-attempt models, tagged with the tier it belongs to.
+ *
+ * The tag is not decoration: `correrCaso` receives nothing else that tells it
+ * whether it is running offline or live, and it needs to know which tiers may
+ * require the case's assertions (S8). `[case] expect` is always required;
+ * `expectOffline` and the case's `tiers` are only honoured for the offline tier.
+ */
+export type FabricaDeModelo = ((intento: number) => ModeloDeIntento) & { readonly tier: NivelEval }
 
 export type ConfiguracionLive = {
   baseUrl: string
@@ -66,7 +73,11 @@ export type ConfiguracionLive = {
 export type ResultadoCaso = {
   name: string
   ok: boolean
+  /** True when the case does not declare this tier: nothing ran, nothing is claimed. */
+  skipped: boolean
   failures: string[]
+  /** Fragments from `informative`: what the reply said, never a criterion (S9). */
+  informative: string[]
   toolCalls: string[]
   inputTokens: number
   outputTokens: number
@@ -132,42 +143,28 @@ function iguales(izquierda: string[], derecha: string[]): boolean {
 /**
  * Checks the declared effects against the observation. Returns one line per
  * mismatch, so a failing case says what it promised and what it got.
+ *
+ * Effects only: a sale row, its server-computed total, the stock, the ledger, the
+ * number of write attempts and which tools ran. All of it holds for any correct
+ * run, scripted or live (S9).
  */
-export function evaluarEspera(espera: ExpectativasEval, observacion: ObservacionCaso): string[] {
+export function evaluarEfectos(espera: ExpectativasEfectos, observacion: ObservacionCaso): string[] {
   const fallas: string[] = []
   const exigir = (condicion: boolean, mensaje: string) => {
     if (!condicion) fallas.push(mensaje)
   }
 
-  if (espera.toolCalls) {
-    const reales = observacion.toolCalls.map((llamada) => llamada.name)
+  const reales = observacion.toolCalls.map((llamada) => llamada.name)
+
+  for (const nombre of espera.toolCallsInclude ?? []) {
     exigir(
-      iguales(espera.toolCalls, reales),
-      `tool calls: se esperaban [${espera.toolCalls.join(', ')}] y fueron [${reales.join(', ')}]`,
+      reales.includes(nombre),
+      `tool calls: se esperaba que «${nombre}» se ejecutara y no se ejecutó (${reales.join(', ') || 'ninguna'})`,
     )
   }
 
-  if (espera.toolErrors) {
-    const reales = observacion.toolCalls
-      .filter((llamada) => !llamada.ok)
-      .map((llamada) => `${llamada.name}:${llamada.errorCode ?? 'sin código'}`)
-    const esperados = espera.toolErrors.map((error) => `${error.name}:${error.code}`)
-    exigir(
-      iguales(esperados, reales),
-      `errores de herramientas: se esperaban [${esperados.join(', ')}] y fueron [${reales.join(', ')}]`,
-    )
-  }
-
-  for (const fragmento of espera.textIncludes ?? []) {
-    exigir(
-      observacion.text.toLowerCase().includes(fragmento.toLowerCase()),
-      `texto: falta «${fragmento}» en «${recortar(observacion.text)}»`,
-    )
-  }
-
-  if (espera.textNotEmpty !== undefined) {
-    const hayTexto = observacion.text.trim().length > 0
-    exigir(hayTexto === espera.textNotEmpty, `texto: se esperaba ${espera.textNotEmpty ? 'una respuesta con texto' : 'una respuesta vacía'}`)
+  for (const nombre of espera.toolCallsExclude ?? []) {
+    exigir(!reales.includes(nombre), `tool calls: «${nombre}» no debía ejecutarse y se ejecutó`)
   }
 
   for (const nombre of espera.noMoneyFieldsIn ?? []) {
@@ -249,13 +246,61 @@ export function evaluarEspera(espera: ExpectativasEval, observacion: Observacion
   }
 
   if (espera.postVentas !== undefined) {
-    const envios = observacion.httpRequests.filter(
-      (peticion) => peticion.method === 'POST' && peticion.pathname === '/api/v1/ventas',
-    ).length
+    const envios = enviosDeVentas(observacion)
+    exigir(envios === espera.postVentas, `POST /ventas: se esperaba ${espera.postVentas} y hubo ${envios}`)
+  }
+
+  return fallas
+}
+
+function enviosDeVentas(observacion: ObservacionCaso): number {
+  return observacion.httpRequests.filter(
+    (peticion) => peticion.method === 'POST' && peticion.pathname === '/api/v1/ventas',
+  ).length
+}
+
+/**
+ * Checks the scripted-model specifics: exact call sequence, error codes, call count,
+ * the round cap and the one required wording (S7). Offline only, by construction.
+ */
+export function evaluarGuion(
+  espera: ExpectativasGuionizado,
+  observacion: ObservacionCaso,
+): string[] {
+  const fallas: string[] = []
+  const exigir = (condicion: boolean, mensaje: string) => {
+    if (!condicion) fallas.push(mensaje)
+  }
+
+  if (espera.toolCalls) {
+    const reales = observacion.toolCalls.map((llamada) => llamada.name)
     exigir(
-      envios === espera.postVentas,
-      `POST /ventas: se esperaba ${espera.postVentas} y hubo ${envios}`,
+      iguales(espera.toolCalls, reales),
+      `tool calls: se esperaban [${espera.toolCalls.join(', ')}] y fueron [${reales.join(', ')}]`,
     )
+  }
+
+  if (espera.toolErrors) {
+    const reales = observacion.toolCalls
+      .filter((llamada) => !llamada.ok)
+      .map((llamada) => `${llamada.name}:${llamada.errorCode ?? 'sin código'}`)
+    const esperados = espera.toolErrors.map((error) => `${error.name}:${error.code}`)
+    exigir(
+      iguales(esperados, reales),
+      `errores de herramientas: se esperaban [${esperados.join(', ')}] y fueron [${reales.join(', ')}]`,
+    )
+  }
+
+  for (const fragmento of espera.requiredText ?? []) {
+    exigir(
+      observacion.text.toLowerCase().includes(fragmento.toLowerCase()),
+      `texto exigido por la spec: falta «${fragmento}» en «${recortar(observacion.text)}»`,
+    )
+  }
+
+  if (espera.textNotEmpty !== undefined) {
+    const hayTexto = observacion.text.trim().length > 0
+    exigir(hayTexto === espera.textNotEmpty, `texto: se esperaba ${espera.textNotEmpty ? 'una respuesta con texto' : 'una respuesta vacía'}`)
   }
 
   if (espera.topReached !== undefined) {
@@ -272,7 +317,30 @@ export function evaluarEspera(espera: ExpectativasEval, observacion: Observacion
     )
   }
 
+  if (espera.postVentas !== undefined) {
+    const envios = enviosDeVentas(observacion)
+    exigir(envios === espera.postVentas, `POST /ventas: se esperaba ${espera.postVentas} y hubo ${envios}`)
+  }
+
   return fallas
+}
+
+/**
+ * What the case kept as a readable hint about the reply, with what was observed.
+ *
+ * These lines never reach `failures`: the wording of an answer is not an effect
+ * (S9). They are useful when reading a run, which is all they are for.
+ */
+export function observarTextoInformativo(
+  informativo: TextoInformativo,
+  texto: string,
+): string[] {
+  return (informativo?.textIncludes ?? []).map((fragmento) => {
+    const presente = texto.toLowerCase().includes(fragmento.toLowerCase())
+    return presente
+      ? `texto (informativo): dijo «${fragmento}»`
+      : `texto (informativo): no dijo «${fragmento}» — no es un criterio de aprobación (S9)`
+  })
 }
 
 /**
@@ -282,7 +350,7 @@ export function evaluarEspera(espera: ExpectativasEval, observacion: Observacion
  * twice with the same idempotency key.
  */
 export function fabricaOffline(fixture: FixtureEval): FabricaDeModelo {
-  return (intento) => {
+  const fabrica = (intento: number): ModeloDeIntento => {
     const reproductor = reproductorDeFixture(fixture.attempts[intento] ?? [])
     return {
       modelo: crearClienteModelo({
@@ -295,12 +363,15 @@ export function fabricaOffline(fixture: FixtureEval): FabricaDeModelo {
       sobrantes: reproductor.restantes,
     }
   }
+
+  return Object.assign(fabrica, { tier: 'offline' as const })
 }
 
 /** Live model: the same cases against the real provider (S8). */
 export function fabricaLive(configuracion: ConfiguracionLive): FabricaDeModelo {
   const modelo = crearClienteModelo(configuracion)
-  return () => ({ modelo, sobrantes: () => 0 })
+  const fabrica = (): ModeloDeIntento => ({ modelo, sobrantes: () => 0 })
+  return Object.assign(fabrica, { tier: 'live' as const })
 }
 
 /**
@@ -491,8 +562,28 @@ async function observarBase(
  *
  * The tool definitions are the assistant's real ones, built from the same Zod
  * schemas: the money-field assertion checks the schema the model actually saw.
+ *
+ * Assertions follow the tier (S8). `expect` is always required. `expectOffline` is
+ * required only offline, because it describes the scripted model. A case that does
+ * not declare the running tier is not executed at all: running it would either
+ * replay the fixture and call it live evidence, or fail the model for taking an
+ * honest path the case never allowed.
  */
 export async function correrCaso(caso: CasoEval, fabrica: FabricaDeModelo): Promise<ResultadoCaso> {
+  if (!caso.tiers.includes(fabrica.tier)) {
+    return {
+      name: caso.name,
+      ok: true,
+      skipped: true,
+      failures: [],
+      informative: [],
+      toolCalls: [],
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs: 0,
+    }
+  }
+
   const inicio = performance.now()
   const { token, precios } = await prepararCaso(caso)
   const ejecucion = await ejecutarIntentos(caso, token, fabrica)
@@ -501,12 +592,17 @@ export async function correrCaso(caso: CasoEval, fabrica: FabricaDeModelo): Prom
   const herramientas = crearHerramientas(clienteApi, { maxProductos: MAX_PRODUCTOS_POR_DEFECTO })
 
   const observacion = await observarBase(ejecucion, herramientas.definiciones, precios)
-  const fallas = evaluarEspera(caso.expect, observacion)
+  const fallas = evaluarEfectos(caso.expect, observacion)
+  if (fabrica.tier === 'offline' && caso.expectOffline) {
+    fallas.push(...evaluarGuion(caso.expectOffline, observacion))
+  }
 
   return {
     name: caso.name,
     ok: fallas.length === 0,
+    skipped: false,
     failures: fallas,
+    informative: observarTextoInformativo(caso.informative, observacion.text),
     toolCalls: ejecucion.llamadas.map((llamada) => llamada.nombre),
     inputTokens: ejecucion.entrada,
     outputTokens: ejecucion.salida,

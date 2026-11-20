@@ -1,6 +1,7 @@
 {
   "name": "ambiguous product",
   "specs": ["S6", "S9"],
+  "tiers": ["offline", "live"],
   "seed": {
     "products": [
       {
@@ -27,14 +28,20 @@
   "maxRounds": 4,
   "fixture": "02-ambiguous-product.json",
   "expect": {
-    "toolCalls": ["listar_productos"],
-    "textIncludes": ["Azúcar común 1 kg", "Azúcar light 1 kg"],
+    "toolCallsExclude": ["registrar_venta"],
     "sales": { "count": 0 },
     "stock": [
       { "productId": "prod_azucar_comun", "stock": 10 },
       { "productId": "prod_azucar_light", "stock": 10 }
     ],
     "movements": [],
+    "productCount": 2,
     "postVentas": 0
+  },
+  "expectOffline": {
+    "toolCalls": ["listar_productos"]
+  },
+  "informative": {
+    "textIncludes": ["Azúcar común 1 kg", "Azúcar light 1 kg"]
   }
 }

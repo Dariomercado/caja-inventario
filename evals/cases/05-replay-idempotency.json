@@ -1,6 +1,7 @@
 {
   "name": "replay idempotency",
   "specs": ["S5", "S7", "S9"],
+  "tiers": ["offline", "live"],
   "seed": {
     "products": [
       {
@@ -20,13 +21,7 @@
   "maxRounds": 4,
   "fixture": "05-replay-idempotency.json",
   "expect": {
-    "toolCalls": [
-      "listar_productos",
-      "registrar_venta",
-      "listar_productos",
-      "registrar_venta"
-    ],
-    "textIncludes": ["no la dupliqué"],
+    "toolCallsInclude": ["registrar_venta"],
     "sales": {
       "count": 1,
       "totalCentavos": { "productId": "prod_azucar_comun", "quantity": 2 },
@@ -36,6 +31,13 @@
     "movements": [
       { "productId": "prod_azucar_comun", "type": "SALIDA", "quantity": 2, "stockAfter": 8 }
     ],
+    "productCount": 1
+  },
+  "expectOffline": {
+    "toolCalls": ["listar_productos", "registrar_venta", "listar_productos", "registrar_venta"],
     "postVentas": 2
+  },
+  "informative": {
+    "textIncludes": ["no la dupliqué"]
   }
 }

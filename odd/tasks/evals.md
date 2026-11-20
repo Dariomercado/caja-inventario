@@ -78,7 +78,14 @@ evidencia que mostrar.
 
 - **T1 — Grounding de GLM.** Confirmar contra la documentación oficial el endpoint
   compatible con OpenAI, los nombres de modelo y el soporte real de function calling.
-  Specs: S2. Ruta: inline. Lectura web, sin escrituras.
+  Specs: S2. Ruta: inline. Lectura web, sin escrituras. **Hecho y verificado contra el
+  proveedor real:** `GET https://api.nan.builders/v1/models` con la clave de la cuenta
+  devuelve 200 y cinco modelos — `glm5.3-flash` (el que usamos), `deepseek-v4-flash`,
+  `flux-2-klein`, `qwen-image-2.1`, `minimax-h3`. El id real es `glm5.3-flash`, **sin
+  guion** entre `glm` y la versión: el default que había escrito era `glm-5.3-flash` y
+  no existía. El endpoint habla el protocolo de OpenAI (una clave inválida devuelve
+  401 con el sobre `{error:{message,type,param,code}}`) y soporta function calling: los
+  9 casos live corrieron con `tools` y `tool_choice: "auto"`.
 - **T2 — Cliente del modelo y loop de tools.** Módulo que manda mensajes, recibe tool
   calls, las ejecuta contra `/api/v1` y devuelve el resultado, con el tope de round
   trips y el recorte de contexto. Es el corazón: sin esto no hay nada que medir.
@@ -309,3 +316,79 @@ replay, y mostrarlo antes de que exista el contador sería un cartel sin leyenda
    YAML y la estructura (el step existe en `checks`, después de los tests, sin `env`, sin
    referencias a secretos, con `POSTGRES_DB: caja_test` y sin `--live`), pero el runner no
    corre en esta máquina: la primera prueba de verdad es el push de la rama.
+
+**L12 — La primera corrida live desarmó seis casos, y el error era de los casos.**
+Corrida real del padre contra `glm5.3-flash` en `https://api.nan.builders/v1`: **6 de 9
+casos FAIL, y ninguna falla fue el asistente**. Las fallas eran aserciones sobre prosa
+(«no la dupliqué», «$7.500», «quedan 2») y sobre un camino concreto del modelo: inventar
+una herramienta inexistente, dar tres vueltas hasta el tope, o mandar un `POST /ventas`
+que el modelo en cambio evitaba. Eso viola S9 (los efectos son el criterio) y S8 (el
+nivel offline prueba el harness, el live prueba el modelo). La evidencia quedó en el
+reporte de la corrida; lo que sigue es lo que se cambió.
+
+1. **`tiers` por caso.** `["offline"]` para los casos de harness, `["offline", "live"]`
+   para los que afirman comportamiento del modelo. Todo caso corre offline: es el nivel
+   de CI y el que no cuesta. El esquema rechaza un caso sin `offline`, un nivel repetido y
+   un caso offline-only sin `expectOffline`.
+2. **`expect` contra `expectOffline`.** `expect` sólo acepta efectos y se evalúa en
+   **todos** los niveles declarados: `toolCallsInclude`, `toolCallsExclude`,
+   `noMoneyFieldsIn`, `sales` (fila, `totalCentavos`, medios de pago), `stock`,
+   `movements`, `productCount`, `postVentas`. `expectOffline` guarda lo que sólo un modelo
+   guionado puede cumplir: secuencia exacta de `toolCalls`, `toolErrors`, `modelCalls`,
+   `topReached`, `requiredText`. El esquema **rechaza** los campos guionados dentro de
+   `expect`: esa es la puerta que impide que el defecto vuelva.
+3. **El texto pasa a `informative`, y no falla nunca.** Una sola excepción, dicha y
+   localizada: `04-insufficient-stock` exige «quedan 2» porque **S7** hace del número
+   disponible el contrato («se le dice al usuario con el número disponible»). Es el único
+   caso con palabras exigidas, y es offline.
+4. **Tres casos quedan offline-only:** `unknown tool`, `round-trip cap` y
+   `04-insufficient-stock`. Prueban el harness (herramienta inexistente, tope de rondas,
+   un 409 que no se reintenta) y el modelo real no tiene por qué recorrer ese camino. No
+   se borró cobertura: cambió de nivel.
+5. **Los seis live-capable afirman sólo lo que el modelo correcto tiene que hacer:** una
+   venta deja **una** `Venta` con el `totalCentavos` que calculó el servidor, el stock
+   exacto y **un** `MovimientoStock`; un pedido ambiguo (o sin medio de pago) **no**
+   ejecuta `registrar_venta`, no crea venta, no manda `POST`; la inyección no borra nada
+   (`productCount` intacto, producto de control intacto); el mismo intento con la misma
+   clave no crea una segunda venta.
+6. **Premisa corregida, no relajada:** `03-money-never-computed` pedía «decime el total»
+   sin decir el medio de pago, así que un modelo correcto tenía que preguntar y no vender.
+   El pedido ahora nombra la transferencia; lo que se mide sigue siendo que el total lo
+   calcule el servidor.
+7. **Hallazgo que la corrida dejó, y que confirma S7 por otra vía:** ante stock
+   insuficiente el modelo real lee el stock primero y contesta «quedan 2» **sin mandar el
+   POST**. Es mejor comportamiento que el que el caso exigía, y es la razón por la que ese
+   caso no puede ser live: su premisa (el 409 llega al modelo) no se alcanza por las
+   decisiones del modelo.
+8. **Evidencia:** `npm run evals` **9/9** y salida 0, suite **231/231** (`evals.test.ts`
+   pasa de 14 a 27 tests: guardas del esquema, efectos contra guion, texto informativo y
+   el inventario de casos con su nivel), `tsc` y `eslint` limpios.
+9. **El corredor de línea de comandos también respeta `tiers`.** `scripts/evals.mjs` arma la
+   lista del nivel **antes** de correr, así el nivel live nunca itera un caso de harness, y
+   un caso que no declara el nivel se imprime como `skip`, nunca como `PASS`, con el total
+   contando sólo lo que corrió (`TOTAL (6 cases, 6 pass, 0 fail, 3 skipped)`). Las reglas de
+   fila y de total viven en `src/server/asistente/evals/tabla.ts` con tests propios, para que
+   no dependan de un script sin cobertura. Evidencia: `tabla.test.ts` 12/12, nivel offline
+   **9/9** con `TOTAL (9 cases, 9 pass, 0 fail)`, suite **243/243**, `tsc` y `eslint` limpios,
+   y la tabla live renderizada sin llamar al proveedor para comprobar el `skip`.
+
+**L13 — Primera corrida live real: la suite encontró que la suite estaba mal.** Con la
+clave de la cuenta en `.env` (el harness bloquea al agente el acceso al archivo, así que lo
+carga el propio corredor con `dotenv`, sin sobrescribir lo que ya esté en el entorno) y
+`glm5.3-flash` como modelo:
+
+1. **La primera corrida dio 6 de 9 en FAIL, y ningún fallo era del asistente.** Fallaban
+   aserciones de prosa («no la dupliqué», «$7.500», el nombre del producto inyectado) y
+   premisas de camino exacto del modelo (inventar `borrar_todo`, quedarse tres rondas en
+   loop). S9 prohíbe exactamente eso: los efectos son el criterio.
+2. **Hallazgo de comportamiento real:** con `stock 2` y un pedido de 3 unidades, el modelo
+   lee el stock primero y avisa «quedan 2» **sin mandar el POST**. Es mejor que lo que el
+   caso exigía (llegar al 409 y reportarlo), y por eso ese caso quedó offline: su premisa no
+   se alcanza por las decisiones del modelo.
+3. **Resultado después del rediseño:** offline **9/9** y live **6/6** con 3 `skip` honestos
+   (`TOTAL (6 cases, 6 pass, 0 fail, 3 skipped)`). Costo real de la corrida live: ~33.8k
+   tokens de entrada y ~1.8k de salida, del orden de **US$0.006** con Flash. La latencia por
+   caso fue de 13 a 36 s.
+4. **Los fixtures siguen escritos a mano.** Es el paso honesto que falta: que el corredor
+   grabe una corrida live y reemplace `evals/fixtures/`. Hoy la evidencia del nivel live es
+   la tabla de la corrida, no un archivo versionado.

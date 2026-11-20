@@ -5,7 +5,7 @@
         "id": "chatcmpl-eval-ambiguous-product-1",
         "object": "chat.completion",
         "created": 1764000100,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,
@@ -33,7 +33,7 @@
         "id": "chatcmpl-eval-ambiguous-product-2",
         "object": "chat.completion",
         "created": 1764000101,
-        "model": "glm-5.3-flash",
+        "model": "glm5.3-flash",
         "choices": [
           {
             "index": 0,

@@ -17,6 +17,12 @@
 //   3. A failing case never stops the table: it is printed with its mismatches and
 //      the process exits 1 at the end.
 //
+// Each tier runs only the cases that declare it (`tiers` in `evals/cases`). A case
+// that does not declare the running tier is printed as `skip`, never as `PASS`, and
+// the total counts only what ran: the offline tier proves the harness and the live
+// tier proves the model, and a table that mixed them would claim the second with
+// the first (S8).
+//
 // Usage:
 //   DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm run evals
 //   DATABASE_URL="postgresql://caja:caja@localhost:5433/caja_test?schema=public" npm run evals -- --live
@@ -67,6 +73,8 @@ const {
   configuracionLiveDesdeEntorno,
   fabricaLive,
   fabricaOffline,
+  filasConOmitidos,
+  formatearTabla,
   leerCasos,
 } = await import('../src/server/asistente/evals/index.ts')
 const { prisma } = await import('../src/lib/db.ts')
@@ -81,46 +89,6 @@ try {
   morir(error instanceof Error ? error.message : String(error))
 }
 
-function sumar(resultados, campo) {
-  return resultados.reduce((total, resultado) => total + resultado[campo], 0)
-}
-
-function imprimirTabla(titulo, resultados) {
-  const anchoCaso = Math.max(4, ...resultados.map((resultado) => resultado.name.length))
-  const anchoLlamadas = Math.max(
-    10,
-    ...resultados.map((resultado) => resultado.toolCalls.join(' → ').length),
-  )
-  const cabecera = `${'case'.padEnd(anchoCaso)}  ${'result'.padEnd(6)}  ${'tool calls'.padEnd(anchoLlamadas)}  ${'in tok'.padStart(7)}  ${'out tok'.padStart(7)}  ${'ms'.padStart(6)}`
-  const linea = '-'.repeat(cabecera.length)
-
-  console.log(`\n${titulo}`)
-  console.log(linea)
-  console.log(cabecera)
-  console.log(linea)
-
-  for (const resultado of resultados) {
-    console.log(
-      `${resultado.name.padEnd(anchoCaso)}  ${(resultado.ok ? 'PASS' : 'FAIL').padEnd(6)}  ` +
-        `${resultado.toolCalls.join(' → ').padEnd(anchoLlamadas)}  ` +
-        `${String(resultado.inputTokens).padStart(7)}  ${String(resultado.outputTokens).padStart(7)}  ` +
-        `${String(resultado.latencyMs).padStart(6)}`,
-    )
-  }
-
-  console.log(linea)
-
-  const pasaron = resultados.filter((resultado) => resultado.ok).length
-  const fallaron = resultados.length - pasaron
-  const resumen = `TOTAL (${resultados.length} cases, ${pasaron} pass, ${fallaron} fail)`
-  const relleno = ' '.repeat(Math.max(0, anchoCaso + 2 + 6 + 2 + anchoLlamadas - resumen.length))
-  console.log(
-    `${resumen}${relleno}  ${String(sumar(resultados, 'inputTokens')).padStart(7)}  ` +
-      `${String(sumar(resultados, 'outputTokens')).padStart(7)}  ${String(sumar(resultados, 'latencyMs')).padStart(6)}`,
-  )
-  console.log(linea)
-}
-
 function imprimirFallas(resultados) {
   for (const resultado of resultados.filter((fila) => !fila.ok)) {
     console.log(`\n  FAIL ${resultado.name}`)
@@ -128,19 +96,29 @@ function imprimirFallas(resultados) {
   }
 }
 
-async function correrTier(fabricaDe) {
+/**
+ * Runs one tier over the cases that declare it.
+ *
+ * The tier list is built before running anything, so this tier never seeds nor
+ * executes a case it cannot judge. The result still carries one row per case, in
+ * file order, with `skip` where nothing ran.
+ */
+async function correrTier(nivel, fabricaDe) {
+  const delNivel = casos.filter(({ caso }) => caso.tiers.includes(nivel))
   const resultados = []
 
-  for (const cargado of casos) {
+  for (const cargado of delNivel) {
     try {
       resultados.push(await correrCaso(cargado.caso, fabricaDe(cargado)))
     } catch (error) {
       // A case whose fixture is stale or whose run threw is a failure, not a reason
-      // to hide the other eight rows.
+      // to hide the other rows.
       resultados.push({
         name: cargado.caso.name,
         ok: false,
+        skipped: false,
         failures: [`la ejecución falló: ${error instanceof Error ? error.message : String(error)}`],
+        informative: [],
         toolCalls: [],
         inputTokens: 0,
         outputTokens: 0,
@@ -149,27 +127,28 @@ async function correrTier(fabricaDe) {
     }
   }
 
-  return resultados
+  return filasConOmitidos(casos, resultados)
 }
 
-const resultadosOffline = await correrTier((cargado) => fabricaOffline(cargado.fixture))
-imprimirTabla('evals · offline tier (fixtures + in-process /api/v1)', resultadosOffline)
-imprimirFallas(resultadosOffline)
+const filasOffline = await correrTier('offline', (cargado) => fabricaOffline(cargado.fixture))
+console.log(`\n${formatearTabla('evals · offline tier (fixtures + in-process /api/v1)', filasOffline)}`)
+imprimirFallas(filasOffline)
 
-let resultadosLive = []
+let filasLive = []
 
 if (modoLive) {
   const configuracion = configuracionLiveDesdeEntorno()
   if (!configuracion) {
     console.log('live tier skipped: ASISTENTE_MODELO_API_KEY is not set.')
   } else {
-    resultadosLive = await correrTier(() => fabricaLive(configuracion))
-    imprimirTabla(`evals · live tier (${configuracion.nombre})`, resultadosLive)
-    imprimirFallas(resultadosLive)
+    filasLive = await correrTier('live', () => fabricaLive(configuracion))
+    console.log(`\n${formatearTabla(`evals · live tier (${configuracion.nombre})`, filasLive)}`)
+    imprimirFallas(filasLive)
   }
 }
 
-const todos = [...resultadosOffline, ...resultadosLive]
+// A skipped row never fails: it did not run, so it proves nothing either way.
+const todos = [...filasOffline, ...filasLive]
 await prisma.$disconnect()
 
 if (todos.some((resultado) => !resultado.ok)) process.exitCode = 1

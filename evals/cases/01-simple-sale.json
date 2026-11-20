@@ -1,6 +1,7 @@
 {
   "name": "simple sale",
   "specs": ["S3", "S9"],
+  "tiers": ["offline", "live"],
   "seed": {
     "products": [
       {
@@ -27,17 +28,23 @@
   "maxRounds": 4,
   "fixture": "01-simple-sale.json",
   "expect": {
-    "toolCalls": ["listar_productos", "registrar_venta"],
-    "textIncludes": ["venta"],
+    "toolCallsInclude": ["registrar_venta"],
     "sales": {
       "count": 1,
       "totalCentavos": { "productId": "prod_azucar_comun", "quantity": 2 },
       "paymentMethods": ["EFECTIVO"]
     },
-    "stock": [{ "productId": "prod_azucar_comun", "stock": 8 }],
+    "stock": [
+      { "productId": "prod_azucar_comun", "stock": 8 },
+      { "productId": "prod_yerba", "stock": 5 }
+    ],
     "movements": [
       { "productId": "prod_azucar_comun", "type": "SALIDA", "quantity": 2, "stockAfter": 8 }
     ],
+    "productCount": 2,
     "postVentas": 1
+  },
+  "expectOffline": {
+    "toolCalls": ["listar_productos", "registrar_venta"]
   }
 }
