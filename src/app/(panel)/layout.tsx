@@ -6,6 +6,7 @@ const NAVEGACION = [
   { href: '/productos', etiqueta: 'Productos' },
   { href: '/ventas/nueva', etiqueta: 'Registrar venta' },
   { href: '/reportes', etiqueta: 'Reportes' },
+  { href: '/asistente', etiqueta: 'Asistente' },
 ]
 
 // Con cacheComponents activo, una ruta que lee cookies() queda bloqueada en el
