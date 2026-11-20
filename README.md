@@ -259,6 +259,14 @@ registra la venta.
 Lectura y escritura son scopes distintos: un token de sólo lectura nunca puede crear un
 producto ni mover stock. Por eso los ejemplos de abajo usan dos tokens.
 
+**El alcance de un token es la tienda, no el usuario.** El esquema no tiene noción de
+negocio —`Producto` y `Usuario` no cuelgan de nada— así que es una sola tienda: un token lee
+el catálogo y las ventas de todos, y las escrituras quedan atribuidas al usuario dueño del
+token. Los reportes son la caja del negocio, no la de una persona. Está dicho en la
+descripción del documento OpenAPI y clavado por un test (`src/app/api/v1/alcance.test.ts`):
+el día que haya varias tiendas, ese test falla primero y obliga a decidir el filtro a
+conciencia.
+
 Los listados paginan por cursor y aceptan `limite` de 1 a 100 (20 por defecto): devuelven
 `siguienteCursor`, o `null` en la última página. Nunca devuelven la tabla entera.
 

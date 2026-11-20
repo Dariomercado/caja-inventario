@@ -181,3 +181,32 @@ sus ventas, pagos, líneas y movimientos. Las bases quedaron sin residuos de pru
 `limitePorMinuto` a 2 por SQL y se hicieron tres pedidos: dos 200 y un 429 con
 `Retry-After`, que es la promesa del README. No quedó como afirmación de código sin
 corrida.
+
+**L14 — Review nativa de la etapa y qué pasó con los tres hallazgos que importaban.**
+El linaje `review-e593b734083ebdb1` aprobó el rango completo (4 lentes, `glm5.3-flash`,
+tier `high` por `src/server/api/auth.ts`) con 14 hallazgos informativos. De ésos, tres
+no eran cosméticos:
+
+1. **`R4-idempotent-replay-race-500` — no reproduce.** La hipótesis era que dos
+   `POST /ventas` simultáneos con la misma clave hacen que el perdedor reciba un 500.
+   Se probó con 8 concurrentes, primero contra el servicio y después contra el handler
+   HTTP real, cinco corridas seguidas: un solo `numero`, una `Venta`, un
+   `MovimientoStock`, stock descontado una vez, estados `{200, 201}` y cero 5xx. La
+   re-lectura está en el `catch`, no antes de la transacción, y Postgres bloquea el
+   `INSERT` del perdedor hasta que el ganador confirma, así que cuando llega la
+   violación del índice único la venta ya está visible. Queda clavado por dos tests
+   (`concurrencia.test.ts` y el caso de 8 concurrentes en `ventas.test.ts`) para que
+   nadie lo "arregle" de nuevo sin evidencia.
+2. **`R2-openapi-ventas-response-lying` / `R3-openapi-venta-respuesta` — real,
+   corregido.** El documento declaraba `esquemaVentaDetalle` para la respuesta de
+   `POST /ventas` y prometía `lineas` y `pagos` que el handler nunca manda; además el
+   éxito figuraba sólo bajo 200 cuando crear devuelve 201. Ahora hay
+   `esquemaVentaRegistrada` y `exitos: [201, 200]`, y un test compara las propiedades
+   declaradas contra las claves del cuerpo real: si el handler cambia, falla.
+3. **`R1-alcance-global` — era una decisión de producto, no un bug.** El esquema no
+   tiene noción de negocio, así que es una sola tienda: un token lee catálogo y ventas
+   de todos y las escrituras quedan a nombre de su usuario. Decisión explícita de
+   Dario: documentarlo y clavarlo. Está en la descripción del documento OpenAPI, en el
+   README y en `src/app/api/v1/alcance.test.ts`.
+
+Evidencia: **270 tests**, `tsc` y `eslint` limpios, evals 9/9 y `next build` OK.
